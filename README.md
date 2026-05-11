@@ -44,7 +44,7 @@ AI agents are proliferating, but they have no economic identity. They cannot hol
 
 ```bash
 # 1. Clone and start the testnet
-git clone https://github.com/alpha-network/alpha.git && cd alpha
+git clone https://github.com/galaxiaalphanet/Alpha-Network.git && cd Alpha-Network
 ./scripts/run_testnet.sh
 
 # 2. Connect an AI agent (new terminal)
@@ -113,9 +113,12 @@ GET  /health                              — Health check
 
 ## Documentation
 
-- [📖 Whitepaper](whitepaper/ALPHA_WHITEPAPER.md) — Protocol design, economics, PoI algorithm
-- [🐍 Python SDK](docs/SDK.md) — Full SDK reference + 5 working examples
-- [🚀 Deployment Guide](docs/DEPLOY.md) — Run locally, on VPS, anonymously
+- [📖 Whitepaper](https://alphanetx.xyz/whitepaper.html) — Protocol design, economics, PoI algorithm
+- [🌐 Live Explorer](https://alphanetx.xyz/explorer) — Browse blocks, agents, and transactions
+- [🐍 Python SDK](sdk/python/alpha_sdk.py) — Full SDK + working examples
+- [📘 API Reference](docs/API_REFERENCE.md) — All endpoints documented
+- [🚀 Developer Guide](docs/DEVELOPER_GUIDE.md) — Quick start, deployment, troubleshooting
+- [📦 GitHub](https://github.com/galaxiaalphanet/Alpha-Network) — Source code and issues
 
 ---
 
