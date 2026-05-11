@@ -178,7 +178,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":    "ok",
 		"chain":     "alpha-1",
 		"timestamp": time.Now().Unix(),
-		"version":   "0.2.0",
+		"version":   "0.3.0",
 		"height":    height,
 	})
 }
@@ -531,7 +531,7 @@ func (s *Server) handleChainInfo(w http.ResponseWriter, r *http.Request) {
 		"total_supply":  core.TotalSupply,
 		"block_time_ms": core.BlockTimeMs,
 		"agent_count":   len(agents),
-		"version":       "0.2.0",
+		"version":       "0.3.0",
 		"consensus":     "Proof of Intelligence (PoI)",
 		"status":        "testnet",
 	}
