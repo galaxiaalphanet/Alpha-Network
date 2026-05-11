@@ -142,7 +142,7 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: demo agent registration: %v", err)
 	} else {
-		demoAddr := core.Address("alpha_agent_" + string(testAgent.AgentID))
+		demoAddr := core.Address(testAgent.Address)
 		_ = l.Credit(demoAddr, core.Amount(10_000))
 		_ = poiEngine.RegisterValidator(testAgent)
 		seedIntelligenceData(mp, testAgent.AgentID)
