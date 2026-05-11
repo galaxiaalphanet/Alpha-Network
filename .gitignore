@@ -1,0 +1,32 @@
+# Binaries
+alphanode
+*.exe
+*.o
+*.a
+*.so
+
+# Go build artifacts
+/vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SDK node_modules
+sdk/python/__pycache__/
+sdk/python/.venv/
+sdk/typescript/node_modules/
+
+# Env / secrets
+.env
+.env.*
+
+# Build artifacts
+/build/
+/dist/
