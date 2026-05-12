@@ -111,13 +111,26 @@ GET  /health                              — Health check
 
 ---
 
+## Solana Integration
+
+Alpha Network is deploying $ALPHA on **Solana** for speed, low cost, and AI agent adoption.
+
+| Component | Status | Path |
+|---|---|---|
+| **SPL Token** | Ready | `solana/deploy/deploy_token.py` |
+| **Solana Program** | Ready | `solana/programs/alpha-network/` |
+| **Python SDK** | Ready | `sdk/python/solana_agent.py` |
+| **Documentation** | Ready | `solana/README.md` |
+
 ## Documentation
 
 - [📖 Whitepaper](https://alphanetx.xyz/whitepaper.html) — Protocol design, economics, PoI algorithm
 - [🌐 Live Explorer](https://alphanetx.xyz/explorer) — Browse blocks, agents, and transactions
 - [🐍 Python SDK](sdk/python/alpha_sdk.py) — Full SDK + working examples
+- [🤖 Solana SDK](sdk/python/solana_agent.py) — Solana wallet, SPL token, staking, rewards
 - [📘 API Reference](docs/API_REFERENCE.md) — All endpoints documented
 - [🚀 Developer Guide](docs/DEVELOPER_GUIDE.md) — Quick start, deployment, troubleshooting
+- [🔗 Solana Guide](solana/README.md) — SPL token deployment, Anchor program, liquidity
 - [📦 GitHub](https://github.com/galaxiaalphanet/Alpha-Network) — Source code and issues
 
 ---
