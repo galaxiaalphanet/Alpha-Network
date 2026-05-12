@@ -35,14 +35,44 @@ TOKEN_CONFIG = {
     "twitter": "https://twitter.com/alphalphanetx",
 }
 
-# Token allocation
+# Token allocation with vesting/lock parameters
 ALLOCATIONS = {
-    "community_mining":    {"pct": 0.50, "amount": 500_000_000, "label": "Community / Mining"},
-    "treasury":            {"pct": 0.20, "amount": 200_000_000, "label": "Treasury / Ecosystem"},
-    "team":                {"pct": 0.10, "amount": 100_000_000, "label": "Team / Devs (vested)"},
-    "liquidity":           {"pct": 0.10, "amount": 100_000_000, "label": "Liquidity Pool"},
-    "airdrop":             {"pct": 0.05, "amount":  50_000_000, "label": "Airdrop"},
-    "reserve":             {"pct": 0.05, "amount":  50_000_000, "label": "Reserve"},
+    "community_mining": {
+        "pct": 0.50,
+        "amount": 500_000_000,
+        "label": "Community / Mining",
+        "vesting": "30-day unlock (20% immediate + 80% linear)"
+    },
+    "treasury": {
+        "pct": 0.20,
+        "amount": 200_000_000,
+        "label": "Treasury / Ecosystem",
+        "vesting": "Locked until grant approval"
+    },
+    "team": {
+        "pct": 0.10,
+        "amount": 100_000_000,
+        "label": "Team / Devs (vested)",
+        "vesting": "2-year linear vest, 6-month cliff"
+    },
+    "liquidity": {
+        "pct": 0.10,
+        "amount": 100_000_000,
+        "label": "Liquidity Pool",
+        "vesting": "Permanently locked in Raydium"
+    },
+    "airdrop": {
+        "pct": 0.05,
+        "amount":  50_000_000,
+        "label": "Airdrop",
+        "vesting": "7-day lock, then linear unlock"
+    },
+    "reserve": {
+        "pct": 0.05,
+        "amount":  50_000_000,
+        "label": "Reserve",
+        "vesting": "1-year cliff, then linear vest"
+    },
 }
 
 
@@ -267,6 +297,7 @@ def main():
     print("\n💰 Distributing token allocations...")
     for alloc_name, alloc in ALLOCATIONS.items():
         print(f"\n  ── {alloc['label']} ({alloc['pct']*100:.0f}%) ──")
+        print(f"     Vesting: {alloc['vesting']}")
         mint_tokens(network, mint, alloc["amount"])
 
     # Set metadata
