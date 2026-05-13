@@ -55,6 +55,9 @@ type BlockProducer struct {
 	marketplace *tasks.Marketplace
 	hub         *net.Hub
 
+	// Phase 4: P2P block broadcasting
+	p2pBroadcaster BlockBroadcaster
+
 	// atomic counters for lock-free stat reads
 	height  uint64
 	txCount uint64
@@ -110,6 +113,69 @@ func (p *BlockProducer) getHub() *net.Hub {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.hub
+}
+
+// BlockBroadcaster is called when a new block is produced locally.
+type BlockBroadcaster func(block *core.Block)
+
+// SetP2PBroadcaster wires a callback for broadcasting blocks to P2P peers.
+func (p *BlockProducer) SetP2PBroadcaster(bc BlockBroadcaster) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.p2pBroadcaster = bc
+}
+// local chain. The block must be the next expected height and its PrevHash must
+// match the current chain tip.
+//
+// Returns nil on success, or an error if the block cannot be incorporated
+// (wrong height, hash mismatch, etc.).
+func (p *BlockProducer) IncorporateExternalBlock(block *core.Block) error {
+	if block == nil {
+		return fmt.Errorf("nil block")
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	currentTip := p.chain[len(p.chain)-1]
+
+	// Height must be exactly tip+1
+	if block.Height != currentTip.Height+1 {
+		// If it's an older block or same height, it's stale
+		if block.Height <= currentTip.Height {
+			return fmt.Errorf("stale block at height %d (current tip %d)", block.Height, currentTip.Height)
+		}
+		// Future block — we need to sync; signal caller to do full sync
+		return fmt.Errorf("future block at height %d (current tip %d)", block.Height, currentTip.Height)
+	}
+
+	// PrevHash must match current tip's hash
+	if block.PrevHash != currentTip.Hash {
+		return fmt.Errorf("prev hash mismatch: expected %s, got %s", currentTip.Hash[:16], block.PrevHash[:16])
+	}
+
+	// Verify block hash
+	storedHash := block.Hash
+	block.ComputeHash()
+	if storedHash != block.Hash {
+		return fmt.Errorf("block hash invalid: stored %s, computed %s", storedHash[:16], block.Hash[:16])
+	}
+
+	// Append to chain
+	p.chain = append(p.chain, block)
+	atomic.StoreUint64(&p.height, block.Height)
+
+	// Persist to store
+	if p.store != nil {
+		_ = p.store.PutBlock(block)
+	}
+
+	// Broadcast via WebSocket
+	if p.hub != nil {
+		p.hub.BroadcastBlock(block)
+	}
+
+	return nil
 }
 
 // SetAgentCount updates the live agent count shown in stats
@@ -333,6 +399,11 @@ func (p *BlockProducer) produceBlock() {
 	// Broadcast block via WebSocket hub
 	if hub != nil {
 		hub.BroadcastBlock(block)
+	}
+
+	// Broadcast block to P2P peers
+	if p.p2pBroadcaster != nil {
+		p.p2pBroadcaster(block)
 	}
 }
 

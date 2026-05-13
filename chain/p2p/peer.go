@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -134,16 +135,16 @@ func (ps *PeerStore) Load(path string) error {
 // myAddr should be "host:port" so peers can call back.
 func (ps *PeerStore) Announce(myAddr string, knownPeers []string) {
 	// Parse myAddr into address + port
-	var myAddress string
-	var myPort int
-	fmt.Sscanf(myAddr, "%s", &myAddress) // simple; in production use net.SplitHostPort
-	if _, err := fmt.Sscanf(myAddr, "%[^:]:%d", &myAddress, &myPort); err != nil {
+	myHost, myPortStr, err := net.SplitHostPort(myAddr)
+	if err != nil {
 		log.Printf("[p2p] announce: invalid myAddr %q: %v", myAddr, err)
 		return
 	}
+	var myPort int
+	fmt.Sscanf(myPortStr, "%d", &myPort)
 
 	payload := map[string]interface{}{
-		"address":  myAddress,
+		"address":  myHost,
 		"port":     myPort,
 		"agent_id": "",
 	}
@@ -201,15 +202,17 @@ func (ps *PeerStore) Bootstrap(seedPeers []string) {
 		_ = resp.Body.Close()
 
 		// Add the seed itself
-		var host string
-		var port int
-		fmt.Sscanf(addr, "%[^:]:%d", &host, &port)
-		ps.Add(&Peer{
-			Address:   host,
-			Port:      port,
-			LastSeen:  time.Now().Unix(),
-			LatencyMs: latency,
-		})
+		host, portStr, err := net.SplitHostPort(addr)
+		if err == nil {
+			var port int
+			fmt.Sscanf(portStr, "%d", &port)
+			ps.Add(&Peer{
+				Address:   host,
+				Port:      port,
+				LastSeen:  time.Now().Unix(),
+				LatencyMs: latency,
+			})
+		}
 
 		// Add its peers
 		for _, p := range result.Peers {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
 	chainnet "github.com/alpha-network/alpha/chain/net"
+	"github.com/alpha-network/alpha/chain/p2p"
 	"github.com/alpha-network/alpha/chain/producer"
 	"github.com/alpha-network/alpha/chain/store"
 	"github.com/alpha-network/alpha/chain/tasks"
@@ -43,6 +45,8 @@ func main() {
 	dataDir := flag.String("datadir", defaultDataDir(), "data directory for chain state")
 	port := flag.Int("port", 8080, "REST API port")
 	wsPort := flag.Int("ws-port", 8081, "WebSocket streaming port")
+	announceAddr := flag.String("announce-addr", "", "external address to announce to peers (e.g. 1.2.3.4)")
+	seedPeers := flag.String("seed-peers", "", "comma-separated seed peers (host:port,host:port)")
 	flag.Parse()
 
 	// Override from environment variables (for Docker / cloud deployments)
@@ -158,11 +162,43 @@ func main() {
 	hub.Start(wsAddr)
 	log.Printf("📡 WebSocket hub started on %s/ws", wsAddr)
 
-	// ── 12. API Server ────────────────────────────────────────────────────────
-	server := api.NewServerPhase2(registry, l, prod, oracle, marketplace, hub, *port)
+	// ── 12. P2P Node ──────────────────────────────────────────────────────────
+	var myAddr string
+	if *announceAddr != "" {
+		myAddr = *announceAddr
+	} else {
+		// Try to auto-detect external address
+		myAddr = "127.0.0.1"
+	}
+	seedList := parseSeedPeers(*seedPeers)
+
+	p2pNode := p2p.NewP2PNode(p2p.Config{
+		MyAddress: myAddr,
+		MyPort:    *port,
+		SeedPeers: seedList,
+		Store:     st,
+		Producer:  prod,
+		BlockHandler: func(block *core.Block) error {
+			return prod.IncorporateExternalBlock(block)
+		},
+	})
+	// Wire P2P broadcast into block producer (so new blocks go to peers)
+	prod.SetP2PBroadcaster(func(block *core.Block) {
+		p2pNode.BroadcastBlock(block)
+	})
+
+	if len(seedList) > 0 || *announceAddr != "" {
+		p2pNode.Start()
+		log.Printf("🔗 P2P node started — %d seed peers", len(seedList))
+	} else {
+		log.Printf("🔗 P2P node initialized (standalone — no seed peers configured)")
+	}
+
+	// ── 13. API Server ────────────────────────────────────────────────────────
+	server := api.NewServerPhase4(registry, l, prod, oracle, marketplace, hub, p2pNode, *port)
 
 
-	// ── 13. Demo agent ────────────────────────────────────────────────────────
+	// ── 14. Demo agent ────────────────────────────────────────────────────────
 	testAgent, err := registry.RegisterAgent(
 		core.Address("alpha1demo000000000000000000000000"),
 		[]core.Capability{
@@ -183,10 +219,10 @@ func main() {
 		log.Printf("✅ Demo agent registered: %s", testAgent.AgentID)
 	}
 
-	// ── 14. Seed demo tasks ───────────────────────────────────────────────────
+	// ── 15. Seed demo tasks ───────────────────────────────────────────────────
 	seedDemoTasks(marketplace)
 
-	// ── 15. Start block producer ──────────────────────────────────────────────
+	// ── 16. Start block producer ──────────────────────────────────────────────
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	prod.Start(ctx)
@@ -198,7 +234,7 @@ func main() {
 	log.Printf("🏥 Health monitor started")
 	log.Printf("⛏  Block producer started — target %dms blocks", genConfig.BlockTimeMs)
 
-	// ── 16. Live stats goroutine ──────────────────────────────────────────────
+	// ── 17. Live stats goroutine ──────────────────────────────────────────────
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -212,7 +248,7 @@ func main() {
 		}
 	}()
 
-	// ── 17. Graceful shutdown ──────────────────────────────────────────────────
+	// ── 18. Graceful shutdown ──────────────────────────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -220,10 +256,11 @@ func main() {
 		log.Printf("🛑 Shutdown signal received — stopping node…")
 		cancel()
 		hub.Stop()
+		p2pNode.Stop()
 		os.Exit(0)
 	}()
 
-	// ── 18. Print startup summary ──────────────────────────────────────────────
+	// ── 19. Print startup summary ──────────────────────────────────────────────
 	log.Printf("🔺 Alpha Network node starting on port %d", *port)
 	log.Printf("📡 Chain ID: %s | Consensus: Proof of Intelligence v0.3", genConfig.ChainID)
 	log.Printf("💰 Total Supply: %d $ALPHA | Circulating: %d", genConfig.TotalSupply, l.CirculatingSupply())
@@ -314,6 +351,21 @@ func seedIntelligenceData(mp *data.DataMarketplace, agentID core.AgentID) {
 }
 
 // seedDemoTasks posts a few example tasks to the marketplace at startup.
+// parseSeedPeers splits a comma-separated list of "host:port" entries.
+func parseSeedPeers(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := []string{}
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
+}
+
 func seedDemoTasks(mp *tasks.Marketplace) {
 	demotasks := []*core.Task{
 		{

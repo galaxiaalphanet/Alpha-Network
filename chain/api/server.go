@@ -38,6 +38,7 @@ type Server struct {
 	mux         *http.ServeMux
 	peerStore   *p2p.PeerStore
 	syncer      *sync.Syncer
+	p2pNode     *p2p.P2PNode
 }
 
 // NewServer creates an API server
@@ -101,6 +102,26 @@ func NewServerPhase2(
 	return s
 }
 
+// NewServerPhase4 creates an API server with all Phase 4 subsystems (P2P) wired up.
+func NewServerPhase4(
+	registry *agent.Registry,
+	l *ledger.Ledger,
+	prod *producer.BlockProducer,
+	oracle *data.IntelligenceOracle,
+	mp *tasks.Marketplace,
+	hub *net.Hub,
+	p2pNode *p2p.P2PNode,
+	port int,
+) *Server {
+	s := NewServerPhase2(registry, l, prod, oracle, mp, hub, port)
+	s.p2pNode = p2pNode
+	if p2pNode != nil {
+		s.peerStore = p2pNode.PeerStore()
+		s.syncer = p2pNode.Syncer()
+	}
+	return s
+}
+
 // SetPeerStore replaces the default peer store (e.g., pre-loaded from disk).
 func (s *Server) SetPeerStore(ps *p2p.PeerStore) {
 	s.peerStore = ps
@@ -155,6 +176,9 @@ func (s *Server) routes() {
 
 	// ZK Proof endpoint (Phase 4)
 	s.mux.HandleFunc("/api/v1/proof/poi", s.handlePoIProof)
+
+	// P2P block gossip (Phase 4)
+	s.mux.HandleFunc("/api/v1/p2p/block", s.handleP2PBlock)
 
 	// --- v0.2 endpoints ---
 
@@ -838,6 +862,51 @@ func (s *Server) handlePeerAnnounce(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"peers":   s.peerStore.Count(),
+	})
+}
+
+// POST /api/v1/p2p/block — receive a block gossiped from a peer node
+func (s *Server) handleP2PBlock(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	var req struct {
+		Block *core.Block `json:"block"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.Block == nil {
+		writeError(w, http.StatusBadRequest, "block is required")
+		return
+	}
+
+	// Extract sender from request (for gossip exclusion)
+	senderAddr := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		senderAddr = fwd
+	}
+
+	if s.p2pNode != nil {
+		if err := s.p2pNode.HandleIncomingBlock(req.Block, senderAddr); err != nil {
+			writeError(w, http.StatusBadRequest, "block rejected: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"height":  req.Block.Height,
+		})
+		return
+	}
+
+	// Fallback: if no P2PNode, just acknowledge
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"height":  req.Block.Height,
+		"note":    "p2p not configured",
 	})
 }
 
