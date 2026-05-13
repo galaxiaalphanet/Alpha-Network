@@ -38,3 +38,5 @@ explorer/alpha-explorer
 explorer/explorer
 alphanode
 genesis.json
+solana/node_modules/
+solana/package-lock.json

@@ -1,8 +1,36 @@
 # Alpha Network Build Report
 **Builder:** Galaxia (AI)
 **Session:** alpha-network-build
-**Date:** 2026-05-11
-**Status:** ✅ All tasks complete — `go build ./...` passes clean
+**Date:** 2026-05-13
+**Status:** 🚧 In progress — CRITICAL #1-2 done, #3 in progress
+
+---
+
+## Phase 4 Roadmap Execution (May 13, 2026)
+
+### ✅ CRITICAL #1: Fix Ledger Persistence — DONE
+- Ledger now persists every balance change to BadgerDB in real-time
+- Uses `BalancePersister` / `MetaPersister` callback pattern (no circular imports)
+- `ScanBalanceEntries()` added to store for startup recovery
+- `LoadBalances()`, `SetTotalBurned()`, `SetTotalSupply()` added to Ledger
+- Test: agent balance of 5000 $ALPHA survives node restart ✅
+- Old "re-seed treasury on restart" hack removed — no longer needed
+
+### ✅ CRITICAL #2: DNS + Caddy SSL — DONE
+- Caddy v2.11.3 configured with production Caddyfile
+- alphanetx.xyz DNS points to VPS (62.238.33.71) ✅
+- Let's Encrypt SSL auto-provisioned ✅
+- Reverse proxy: `/api/*` → :8080, `/ws` → :8081, `/` → :8082
+- Security headers + gzip compression + access logging
+- `https://alphanetx.xyz/health` → live
+- `https://alphanetx.xyz/api/v1/chain/info` → live
+- `https://alphanetx.xyz/` → Explorer live
+
+### 🔴 CRITICAL #3: Deploy $ALPHA SPL Token on Solana Devnet — NEXT
+
+---
+
+## Original Report (Phase 1-3)
 
 ---
 
