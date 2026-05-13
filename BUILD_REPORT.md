@@ -59,7 +59,21 @@
 - Startup loads from latest snapshot (fast path) with individual entry fallback
 - Crash recovery: restart after crash loads from last snapshot
 
-### 🔴 NEXT: P2P Networking — Phase 1 (2 nodes)
+### 🔴 CRITICAL #3: Deploy $ALPHA SPL Token on Solana Devnet — SKIPPED (faucet blocked)
+
+### ✅ GROWTH #8: P2P Networking — DONE
+- P2PNode: PeerStore + Syncer + Block gossip in one orchestrator
+- Bootstrap: auto-discovers peers from seed list
+- Block broadcast: produced blocks sent to all known peers via POST /api/v1/p2p/block
+- Block receive: validate + incorporate peer blocks into local chain
+- Block gossip: re-forward received blocks (excluding sender)
+- Background loops: announce every 30s, sync every 60s
+- Rate limiter: exempted /api/v1/blocks/, /api/v1/peers, /api/v1/sync, /api/v1/p2p/
+- CLI flags: --seed-peers (comma-separated host:port), --announce-addr
+- NewServerPhase4: full P2P wiring
+- Tested: 2 nodes discover each other, broadcast 15 blocks between them
+
+### 🔴 NEXT: IPFS Integration (#9)
 
 ---
 
