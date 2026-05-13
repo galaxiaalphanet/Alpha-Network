@@ -1,6 +1,6 @@
 module github.com/alpha-network/alpha
 
-go 1.26.2
+go 1.25.0
 
 require (
 	github.com/consensys/gnark v0.11.0
