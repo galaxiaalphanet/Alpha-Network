@@ -26,7 +26,44 @@
 - `https://alphanetx.xyz/api/v1/chain/info` → live
 - `https://alphanetx.xyz/` → Explorer live
 
-### 🔴 CRITICAL #3: Deploy $ALPHA SPL Token on Solana Devnet — NEXT
+### 🔴 CRITICAL #3: Deploy $ALPHA SPL Token on Solana Devnet — CODE READY, BLOCKED
+- Deployment script written (Node.js): `solana/deploy_spl_token.js`
+- Deployed and verified on localnet: mint `GEFaDsbpftmq6WPEuV8b3zZrX3RzjtNbYjuEEYZHDq6t`
+- 1B fixed supply, 9 decimals, mint authority REVOKED ✅
+- Solana CLI v2.0.18 installed ✅
+- Devnet faucet rate-limited — blocked on external dependency
+- To deploy: `cd solana && node deploy_spl_token.js` (once SOL obtained)
+
+### ✅ HIGH PRIORITY #4: Wire Slashing Enforcement — DONE
+- Task `CompleteTask` now slashes outliers: 10% of task reward deducted
+- PoI consensus slashing broadcasts WebSocket events (type: slash)
+- Added `SlashCallback` to Marketplace + `SetSlashCallback()`
+- Economic penalty fully enforced: consensus outliers lose 10% of stake, task outliers lose 10% of reward
+
+### ✅ HIGH PRIORITY #5: ZK Proof REST Endpoint — DONE
+- Added `POST /api/v1/proof/poi` endpoint to Go API server
+- Accepts `latency_ms`, `entropy_score`, `agent_id`
+- Generates real Groth16/BN254 ZK proofs via gnark
+- Validates latency in [100ms, 10000ms] range
+- Tested: valid proof generated, invalid latency (50000ms) correctly rejected
+
+### ✅ HIGH PRIORITY #6: Publish Python SDK to PyPI — READY
+- Package structure: `alpha_network_sdk/` with `__init__.py`, `pyproject.toml`
+- Build verified: wheel (.whl) and sdist (.tar.gz) generated
+- All metadata complete: authors, classifiers, dependencies
+- Ready for PyPI: `pip install build twine && python -m build && twine upload dist/*`
+
+### ✅ HIGH PRIORITY #7: Persistent Ledger Snapshots + Recovery — DONE
+- Added `PutSnapshot()` / `GetLatestSnapshot()` to BadgerDB store
+- Ledger snapshots created every 100 blocks
+- Startup loads from latest snapshot (fast path) with individual entry fallback
+- Crash recovery: restart after crash loads from last snapshot
+
+### 🔴 NEXT: P2P Networking — Phase 1 (2 nodes)
+
+---
+
+## Original Report (Phase 1-3)
 
 ---
 
