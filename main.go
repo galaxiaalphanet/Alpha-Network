@@ -20,6 +20,7 @@ import (
 	"github.com/alpha-network/alpha/chain/core"
 	"github.com/alpha-network/alpha/chain/data"
 	"github.com/alpha-network/alpha/chain/genesis"
+	"github.com/alpha-network/alpha/chain/ipfs"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
 	chainnet "github.com/alpha-network/alpha/chain/net"
@@ -194,11 +195,21 @@ func main() {
 		log.Printf("🔗 P2P node initialized (standalone — no seed peers configured)")
 	}
 
-	// ── 13. API Server ────────────────────────────────────────────────────────
+	// ── 13. IPFS Client ───────────────────────────────────────────────────────
+	ipfsDir := filepath.Join(*dataDir, "ipfs")
+	ipfsClient := ipfs.NewClient("http://localhost:5001", ipfsDir)
+	if ipfsClient.IsAvailable() {
+		log.Printf("📦 IPFS node connected at localhost:5001")
+	} else {
+		log.Printf("📦 IPFS using local content-addressed storage (%s)", ipfsDir)
+	}
+
+	// ── 14. API Server ────────────────────────────────────────────────────────
 	server := api.NewServerPhase4(registry, l, prod, oracle, marketplace, hub, p2pNode, *port)
+	server.SetIPFSClient(ipfsClient)
 
 
-	// ── 14. Demo agent ────────────────────────────────────────────────────────
+	// ── 15. Demo agent ────────────────────────────────────────────────────────
 	testAgent, err := registry.RegisterAgent(
 		core.Address("alpha1demo000000000000000000000000"),
 		[]core.Capability{
@@ -219,10 +230,10 @@ func main() {
 		log.Printf("✅ Demo agent registered: %s", testAgent.AgentID)
 	}
 
-	// ── 15. Seed demo tasks ───────────────────────────────────────────────────
+	// ── 16. Seed demo tasks ───────────────────────────────────────────────────
 	seedDemoTasks(marketplace)
 
-	// ── 16. Start block producer ──────────────────────────────────────────────
+	// ── 17. Start block producer ──────────────────────────────────────────────
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	prod.Start(ctx)
@@ -234,7 +245,7 @@ func main() {
 	log.Printf("🏥 Health monitor started")
 	log.Printf("⛏  Block producer started — target %dms blocks", genConfig.BlockTimeMs)
 
-	// ── 17. Live stats goroutine ──────────────────────────────────────────────
+	// ── 18. Live stats goroutine ──────────────────────────────────────────────
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -248,7 +259,7 @@ func main() {
 		}
 	}()
 
-	// ── 18. Graceful shutdown ──────────────────────────────────────────────────
+	// ── 19. Graceful shutdown ──────────────────────────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -260,7 +271,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// ── 19. Print startup summary ──────────────────────────────────────────────
+	// ── 20. Print startup summary ──────────────────────────────────────────────
 	log.Printf("🔺 Alpha Network node starting on port %d", *port)
 	log.Printf("📡 Chain ID: %s | Consensus: Proof of Intelligence v0.3", genConfig.ChainID)
 	log.Printf("💰 Total Supply: %d $ALPHA | Circulating: %d", genConfig.TotalSupply, l.CirculatingSupply())

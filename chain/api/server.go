@@ -5,6 +5,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/alpha-network/alpha/chain/core"
 	alphacrypto "github.com/alpha-network/alpha/chain/crypto"
 	"github.com/alpha-network/alpha/chain/data"
+	"github.com/alpha-network/alpha/chain/ipfs"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
 	"github.com/alpha-network/alpha/chain/net"
@@ -39,6 +41,7 @@ type Server struct {
 	peerStore   *p2p.PeerStore
 	syncer      *sync.Syncer
 	p2pNode     *p2p.P2PNode
+	ipfsClient  *ipfs.Client
 }
 
 // NewServer creates an API server
@@ -132,6 +135,11 @@ func (s *Server) SetMonitor(m *monitor.Monitor) {
 	s.mon = m
 }
 
+// SetIPFSClient attaches an IPFS client to the server.
+func (s *Server) SetIPFSClient(c *ipfs.Client) {
+	s.ipfsClient = c
+}
+
 // Start launches the API server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
@@ -179,6 +187,9 @@ func (s *Server) routes() {
 
 	// P2P block gossip (Phase 4)
 	s.mux.HandleFunc("/api/v1/p2p/block", s.handleP2PBlock)
+
+	// IPFS content (Phase 4)
+	s.mux.HandleFunc("/api/v1/ipfs/", s.handleIPFS)
 
 	// --- v0.2 endpoints ---
 
@@ -908,6 +919,98 @@ func (s *Server) handleP2PBlock(w http.ResponseWriter, r *http.Request) {
 		"height":  req.Block.Height,
 		"note":    "p2p not configured",
 	})
+}
+
+// IPFS content handler — /api/v1/ipfs/{action}
+// POST /api/v1/ipfs/add  — add content and return CID
+// GET  /api/v1/ipfs/{cid} — retrieve content by CID
+func (s *Server) handleIPFS(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/ipfs/")
+
+	if s.ipfsClient == nil {
+		writeError(w, http.StatusServiceUnavailable, "IPFS not configured")
+		return
+	}
+
+	// POST /api/v1/ipfs/add
+	if path == "add" && r.Method == http.MethodPost {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "read body: "+err.Error())
+			return
+		}
+		agentID := r.URL.Query().Get("agent_id")
+		taskID := r.URL.Query().Get("task_id")
+		cid, err := s.ipfsClient.AddResult(agentID, taskID, body)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "ipfs add failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"cid":     cid,
+			"size":    len(body),
+		})
+		return
+	}
+
+	// POST /api/v1/ipfs/pin — pin a CID
+	if path == "pin" && r.Method == http.MethodPost {
+		var req struct {
+			CID string `json:"cid"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.CID == "" {
+			writeError(w, http.StatusBadRequest, "cid required")
+			return
+		}
+		if err := s.ipfsClient.Pin(req.CID); err != nil {
+			writeError(w, http.StatusInternalServerError, "pin failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"cid":     req.CID,
+		})
+		return
+	}
+
+	// DELETE /api/v1/ipfs/{cid} — unpin content
+	if r.Method == http.MethodDelete && path != "" && path != "add" && path != "pin" {
+		if err := s.ipfsClient.Unpin(path); err != nil {
+			writeError(w, http.StatusInternalServerError, "unpin failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"cid":     path,
+		})
+		return
+	}
+
+	// GET /api/v1/ipfs/{cid} — retrieve content
+	if r.Method == http.MethodGet && path != "" && path != "info" {
+		data, err := s.ipfsClient.Cat(path)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "content not found: "+err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+		return
+	}
+
+	// GET /api/v1/ipfs/info — IPFS client info
+	if path == "info" && r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, s.ipfsClient.Info())
+		return
+	}
+
+	writeError(w, http.StatusMethodNotAllowed, "use: POST add, POST pin, GET {cid}, DELETE {cid}, GET info")
 }
 
 // GET /api/v1/sync/status — return sync status relative to known peers
