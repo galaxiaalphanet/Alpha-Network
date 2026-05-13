@@ -105,6 +105,13 @@ func (p *BlockProducer) SetHub(h *net.Hub) {
 	p.mu.Unlock()
 }
 
+// getHub returns the WebSocket hub in a thread-safe manner.
+func (p *BlockProducer) getHub() *net.Hub {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.hub
+}
+
 // SetAgentCount updates the live agent count shown in stats
 func (p *BlockProducer) SetAgentCount(n int) {
 	p.mu.Lock()
@@ -238,7 +245,17 @@ func (p *BlockProducer) produceBlock() {
 		// Apply slashes (deduct from agent balance, best-effort)
 		for agentID, slash := range result.Slashes {
 			agentAddr := core.Address("alpha_agent_" + string(agentID))
-			_ = p.ledger.Debit(agentAddr, slash)
+			if err := p.ledger.Debit(agentAddr, slash); err == nil && slash > 0 {
+				// Broadcast slash event via WebSocket
+				if h := p.getHub(); h != nil {
+					h.BroadcastAgentEvent(net.AgentEvent{
+						Type:    "slash",
+						AgentID: agentID,
+						Payload: map[string]interface{}{"amount": int64(slash)},
+						At:      time.Now().Unix(),
+					})
+				}
+			}
 		}
 	} else {
 		// No consensus quorum — produce block with synthetic validator
