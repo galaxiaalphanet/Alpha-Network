@@ -20,6 +20,7 @@ import (
 	"github.com/alpha-network/alpha/chain/core"
 	"github.com/alpha-network/alpha/chain/data"
 	"github.com/alpha-network/alpha/chain/genesis"
+	"github.com/alpha-network/alpha/chain/governance"
 	"github.com/alpha-network/alpha/chain/ipfs"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
@@ -207,6 +208,12 @@ func main() {
 	// ── 14. API Server ────────────────────────────────────────────────────────
 	server := api.NewServerPhase4(registry, l, prod, oracle, marketplace, hub, p2pNode, *port)
 	server.SetIPFSClient(ipfsClient)
+
+	// Governance module
+	govModule := governance.NewModule(governance.DefaultConfig(), l, registry)
+	server.SetGovModule(govModule)
+	prod.SetGovModule(govModule)
+	log.Printf("🏛  Governance module initialized")
 
 
 	// ── 15. Demo agent ────────────────────────────────────────────────────────

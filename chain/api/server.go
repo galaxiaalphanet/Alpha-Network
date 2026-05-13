@@ -16,6 +16,7 @@ import (
 	"github.com/alpha-network/alpha/chain/core"
 	alphacrypto "github.com/alpha-network/alpha/chain/crypto"
 	"github.com/alpha-network/alpha/chain/data"
+	"github.com/alpha-network/alpha/chain/governance"
 	"github.com/alpha-network/alpha/chain/ipfs"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
@@ -42,6 +43,7 @@ type Server struct {
 	syncer      *sync.Syncer
 	p2pNode     *p2p.P2PNode
 	ipfsClient  *ipfs.Client
+	govModule   *governance.Module
 }
 
 // NewServer creates an API server
@@ -140,6 +142,11 @@ func (s *Server) SetIPFSClient(c *ipfs.Client) {
 	s.ipfsClient = c
 }
 
+// SetGovModule attaches a governance module to the server.
+func (s *Server) SetGovModule(g *governance.Module) {
+	s.govModule = g
+}
+
 // Start launches the API server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
@@ -190,6 +197,11 @@ func (s *Server) routes() {
 
 	// IPFS content (Phase 4)
 	s.mux.HandleFunc("/api/v1/ipfs/", s.handleIPFS)
+
+	// Governance (Phase 4)
+	s.mux.HandleFunc("/api/v1/gov/propose", s.handleGovPropose)
+	s.mux.HandleFunc("/api/v1/gov/vote", s.handleGovVote)
+	s.mux.HandleFunc("/api/v1/gov/", s.handleGovByID)
 
 	// --- v0.2 endpoints ---
 
@@ -919,6 +931,176 @@ func (s *Server) handleP2PBlock(w http.ResponseWriter, r *http.Request) {
 		"height":  req.Block.Height,
 		"note":    "p2p not configured",
 	})
+}
+
+// POST /api/v1/gov/propose — submit a governance proposal
+func (s *Server) handleGovPropose(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	if s.govModule == nil {
+		writeError(w, http.StatusServiceUnavailable, "governance not configured")
+		return
+	}
+
+	var req struct {
+		Type        string `json:"type"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		NewValue    string `json:"new_value"`
+		AgentID     string `json:"agent_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	currentBlock := uint64(0)
+	if s.producer != nil {
+		currentBlock = s.producer.GetChainHeight()
+	}
+
+	prop, err := s.govModule.Propose(
+		governance.ProposalType(req.Type),
+		req.Title, req.Description, req.NewValue,
+		core.AgentID(req.AgentID),
+		currentBlock,
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "propose failed: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"proposal": prop,
+	})
+}
+
+// POST /api/v1/gov/vote — cast a vote on a proposal
+func (s *Server) handleGovVote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	if s.govModule == nil {
+		writeError(w, http.StatusServiceUnavailable, "governance not configured")
+		return
+	}
+
+	var req struct {
+		AgentID    string `json:"agent_id"`
+		ProposalID string `json:"proposal_id"`
+		Choice     bool   `json:"choice"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	currentBlock := uint64(0)
+	if s.producer != nil {
+		currentBlock = s.producer.GetChainHeight()
+	}
+
+	vote, err := s.govModule.Vote(
+		core.AgentID(req.AgentID),
+		req.ProposalID,
+		req.Choice,
+		currentBlock,
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "vote failed: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"vote":    vote,
+	})
+}
+
+// Governance by ID handler — covers:
+//   GET  /api/v1/gov/{id}        — proposal details
+//   GET  /api/v1/gov/{id}/votes  — votes on proposal
+//   POST /api/v1/gov/{id}/execute — execute passed proposal
+//   GET  /api/v1/gov/list        — list all proposals
+//   GET  /api/v1/gov/stats       — governance stats
+func (s *Server) handleGovByID(w http.ResponseWriter, r *http.Request) {
+	if s.govModule == nil {
+		writeError(w, http.StatusServiceUnavailable, "governance not configured")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/gov/")
+
+	// GET /api/v1/gov/list
+	if path == "list" && r.Method == http.MethodGet {
+		var status *governance.ProposalStatus
+		if s := r.URL.Query().Get("status"); s != "" {
+			st := governance.ProposalStatus(s)
+			status = &st
+		}
+		proposals := s.govModule.ListProposals(status)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":   true,
+			"proposals": proposals,
+			"count":     len(proposals),
+		})
+		return
+	}
+
+	// GET /api/v1/gov/stats
+	if path == "stats" && r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"stats":   s.govModule.Stats(),
+		})
+		return
+	}
+
+	// GET /api/v1/gov/{id}/votes
+	if strings.HasSuffix(path, "/votes") && r.Method == http.MethodGet {
+		propID := strings.TrimSuffix(path, "/votes")
+		votes := s.govModule.GetVotes(propID)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"votes":   votes,
+			"count":   len(votes),
+		})
+		return
+	}
+
+	// POST /api/v1/gov/{id}/execute
+	if strings.HasSuffix(path, "/execute") && r.Method == http.MethodPost {
+		propID := strings.TrimSuffix(path, "/execute")
+		if err := s.govModule.Execute(propID); err != nil {
+			writeError(w, http.StatusBadRequest, "execute failed: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":     true,
+			"proposal_id": propID,
+		})
+		return
+	}
+
+	// GET /api/v1/gov/{id}
+	if r.Method == http.MethodGet {
+		prop, err := s.govModule.GetProposal(path)
+		if err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"proposal": prop,
+		})
+		return
+	}
+
+	writeError(w, http.StatusMethodNotAllowed, "use: GET list/stats/{id}/{id}/votes, POST propose/vote/{id}/execute")
 }
 
 // IPFS content handler — /api/v1/ipfs/{action}

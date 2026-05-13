@@ -18,6 +18,7 @@ import (
 
 	"github.com/alpha-network/alpha/chain/consensus"
 	"github.com/alpha-network/alpha/chain/core"
+	"github.com/alpha-network/alpha/chain/governance"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/net"
 	"github.com/alpha-network/alpha/chain/store"
@@ -58,6 +59,9 @@ type BlockProducer struct {
 	// Phase 4: P2P block broadcasting
 	p2pBroadcaster BlockBroadcaster
 
+	// Phase 4: Governance
+	govModule *governance.Module
+
 	// atomic counters for lock-free stat reads
 	height  uint64
 	txCount uint64
@@ -91,6 +95,13 @@ func NewBlockProducer(poi *consensus.PoIEngine, l *ledger.Ledger) *BlockProducer
 func (p *BlockProducer) SetStore(s *store.Store) {
 	p.mu.Lock()
 	p.store = s
+	p.mu.Unlock()
+}
+
+// SetGovModule wires the governance module for per-block state advancement.
+func (p *BlockProducer) SetGovModule(g *governance.Module) {
+	p.mu.Lock()
+	p.govModule = g
 	p.mu.Unlock()
 }
 
@@ -404,6 +415,11 @@ func (p *BlockProducer) produceBlock() {
 	// Broadcast block to P2P peers
 	if p.p2pBroadcaster != nil {
 		p.p2pBroadcaster(block)
+	}
+
+	// Advance governance state machine
+	if p.govModule != nil {
+		p.govModule.Tick(nextHeight)
 	}
 }
 
