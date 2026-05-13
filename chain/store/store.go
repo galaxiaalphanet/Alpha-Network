@@ -216,6 +216,40 @@ func (s *Store) PutIntelligenceRecord(r *data.IntelligenceRecord) error {
 	return s.Set(intelKey(r.AgentID, r.RecordID), val)
 }
 
+// ScanBalanceEntries returns all persisted balance entries as a map of address → amount.
+// Used for ledger recovery at startup.
+func (s *Store) ScanBalanceEntries() (map[core.Address]core.Amount, error) {
+	result := make(map[core.Address]core.Amount)
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte(prefixBalance)
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefixLen := len(prefixBalance)
+		for it.Seek([]byte(prefixBalance)); it.ValidForPrefix([]byte(prefixBalance)); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+			addr := core.Address(key[prefixLen:])
+
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+			var amt core.Amount
+			if err := json.Unmarshal(val, &amt); err != nil {
+				continue
+			}
+			result[addr] = amt
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // GetIntelligenceRecords returns all intelligence records for a given agent.
 func (s *Store) GetIntelligenceRecords(agentID core.AgentID) ([]*data.IntelligenceRecord, error) {
 	prefix := []byte(fmt.Sprintf("%s%s:", prefixIntelRec, agentID))

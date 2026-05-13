@@ -30,3 +30,11 @@ sdk/typescript/node_modules/
 # Build artifacts
 /build/
 /dist/
+data/
+*.sst
+*.vlog
+*.mem
+explorer/alpha-explorer
+explorer/explorer
+alphanode
+genesis.json

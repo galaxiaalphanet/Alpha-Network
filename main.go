@@ -79,7 +79,19 @@ func main() {
 	}()
 	log.Printf("💾 BadgerDB store opened at %s", storeDir)
 
-	// ── 4. Chain Initialization (first run only) ──────────────────────────────
+	// ── 4. Wire ledger persistence to BadgerDB ─────────────────────────────────
+	// Every balance change is persisted immediately. On restart, balances
+	// survive because they're loaded from BadgerDB.
+	l.SetPersisters(
+		func(addr core.Address, amount core.Amount) error {
+			return st.PutBalance(addr, amount)
+		},
+		func(key string, value []byte) error {
+			return st.PutMeta(key, value)
+		},
+	)
+
+	// ── 5. Chain Initialization (first run only) ──────────────────────────────
 	if !st.HasGenesisBlock() {
 		log.Printf("🌱 First run: initializing chain from genesis...")
 		if err := genesis.InitChainFromGenesis(genConfig, st, l); err != nil {
@@ -87,49 +99,56 @@ func main() {
 		}
 		log.Printf("✅ Chain initialized: %s", genConfig.ChainID)
 	} else {
-		// Re-seed treasury on restart (in-memory ledger doesn't persist)
-		if genConfig.TreasuryBlockRewards > 0 {
-			_ = l.Credit(core.Address("alpha1_block_rewards_treasury"),
-				core.Amount(genConfig.TreasuryBlockRewards))
+		// Restore ledger balances from BadgerDB
+		balances, err := st.ScanBalanceEntries()
+		if err != nil {
+			log.Printf("⚠️  Could not scan balance entries: %v", err)
+		} else if len(balances) > 0 {
+			if err := l.LoadBalances(balances); err != nil {
+				log.Printf("⚠️  Could not load balances: %v", err)
+			}
 		}
-		if genConfig.TreasuryEcosystemBootstrap > 0 {
-			_ = l.Credit(core.Address("alpha1_ecosystem_bootstrap_treasury"),
-				core.Amount(genConfig.TreasuryEcosystemBootstrap))
+		// Also restore metadata
+		if burned, metaErr := st.GetMeta("total_burned"); metaErr == nil {
+			var b int64
+			if _, parseErr := fmt.Sscanf(string(burned), "%d", &b); parseErr == nil {
+				l.SetTotalBurned(core.Amount(b))
+			}
 		}
-		log.Printf("♻️  Resuming existing chain (genesis block found)")
+		log.Printf("♻️  Resuming existing chain (genesis block found, %d accounts loaded)", len(balances))
 	}
 
-	// ── 5. Agent Registry ─────────────────────────────────────────────────────
+	// ── 6. Agent Registry ─────────────────────────────────────────────────────
 	registry := agent.NewRegistry()
 
-	// ── 6. PoI Consensus Engine ───────────────────────────────────────────────
+	// ── 7. PoI Consensus Engine ───────────────────────────────────────────────
 	poiEngine := consensus.NewPoIEngine()
 
-	// ── 7. Task Marketplace ───────────────────────────────────────────────────
+	// ── 8. Task Marketplace ───────────────────────────────────────────────────
 	marketplace := tasks.NewMarketplace(l)
 	log.Printf("🛒 Task marketplace initialized")
 
-	// ── 8. Block Producer ─────────────────────────────────────────────────────
+	// ── 9. Block Producer ─────────────────────────────────────────────────────
 	prod := producer.NewBlockProducer(poiEngine, l)
 	prod.SetStore(st)
 	prod.SetMarketplace(marketplace)
 
-	// ── 9. Data / Intelligence Layer ──────────────────────────────────────────
+	// ── 10. Data / Intelligence Layer ──────────────────────────────────────────
 	mp := data.NewDataMarketplace(l, core.Address("alpha1_block_rewards_treasury"))
 	oracle := data.NewIntelligenceOracle(mp, registry)
 
-	// ── 10. WebSocket Hub ─────────────────────────────────────────────────────
+	// ── 11. WebSocket Hub ─────────────────────────────────────────────────────
 	hub := chainnet.NewHub()
 	prod.SetHub(hub)
 	wsAddr := fmt.Sprintf(":%d", *wsPort)
 	hub.Start(wsAddr)
 	log.Printf("📡 WebSocket hub started on %s/ws", wsAddr)
 
-	// ── 11. API Server ────────────────────────────────────────────────────────
+	// ── 12. API Server ────────────────────────────────────────────────────────
 	server := api.NewServerPhase2(registry, l, prod, oracle, marketplace, hub, *port)
 
 
-	// ── 12. Demo agent ────────────────────────────────────────────────────────
+	// ── 13. Demo agent ────────────────────────────────────────────────────────
 	testAgent, err := registry.RegisterAgent(
 		core.Address("alpha1demo000000000000000000000000"),
 		[]core.Capability{
@@ -150,10 +169,10 @@ func main() {
 		log.Printf("✅ Demo agent registered: %s", testAgent.AgentID)
 	}
 
-	// ── 13. Seed demo tasks ───────────────────────────────────────────────────
+	// ── 14. Seed demo tasks ───────────────────────────────────────────────────
 	seedDemoTasks(marketplace)
 
-	// ── 14. Start block producer ──────────────────────────────────────────────
+	// ── 15. Start block producer ──────────────────────────────────────────────
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	prod.Start(ctx)
@@ -165,7 +184,7 @@ func main() {
 	log.Printf("🏥 Health monitor started")
 	log.Printf("⛏  Block producer started — target %dms blocks", genConfig.BlockTimeMs)
 
-	// ── 15. Live stats goroutine ──────────────────────────────────────────────
+	// ── 16. Live stats goroutine ──────────────────────────────────────────────
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -179,7 +198,7 @@ func main() {
 		}
 	}()
 
-	// ── 16. Graceful shutdown ──────────────────────────────────────────────────
+	// ── 17. Graceful shutdown ──────────────────────────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -190,7 +209,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// ── 17. Print startup summary ──────────────────────────────────────────────
+	// ── 18. Print startup summary ──────────────────────────────────────────────
 	log.Printf("🔺 Alpha Network node starting on port %d", *port)
 	log.Printf("📡 Chain ID: %s | Consensus: Proof of Intelligence v0.3", genConfig.ChainID)
 	log.Printf("💰 Total Supply: %d $ALPHA | Circulating: %d", genConfig.TotalSupply, l.CirculatingSupply())

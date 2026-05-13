@@ -1,5 +1,6 @@
 // Package ledger implements the $ALPHA token account ledger
-// Thread-safe, with overdraft protection, atomic transfers, and deflationary burn tracking
+// Thread-safe, with overdraft protection, atomic transfers, deflationary burn tracking,
+// and persistent balance storage via configurable callbacks.
 package ledger
 
 import (
@@ -7,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -15,8 +17,8 @@ import (
 
 // TxRecord is an immutable ledger entry for the transaction log
 type TxRecord struct {
-	TxID      string      `json:"tx_id"`
-	Type      string      `json:"type"`
+	TxID      string       `json:"tx_id"`
+	Type      string       `json:"type"`
 	From      core.Address `json:"from"`
 	To        core.Address `json:"to"`
 	Amount    core.Amount  `json:"amount"`
@@ -24,13 +26,22 @@ type TxRecord struct {
 	Timestamp int64        `json:"timestamp"`
 }
 
+// BalancePersister is called after every balance change to persist an account's balance.
+// addr is the account address, amount is the new balance.
+type BalancePersister func(addr core.Address, amount core.Amount) error
+
+// MetaPersister is called after burns to persist ledger metadata (burned total, supply).
+type MetaPersister func(key string, value []byte) error
+
 // Ledger manages all $ALPHA account balances and burn tracking
 type Ledger struct {
-	mu             sync.RWMutex
-	balances       map[core.Address]core.Amount
-	txLog          []*TxRecord
-	totalBurned    core.Amount
-	totalSupply    core.Amount
+	mu              sync.RWMutex
+	balances        map[core.Address]core.Amount
+	txLog           []*TxRecord
+	totalBurned     core.Amount
+	totalSupply     core.Amount
+	persistBalance  BalancePersister // optional callback for persisting balances
+	persistMeta     MetaPersister    // optional callback for persisting metadata
 }
 
 // NewLedger creates a Ledger with a fixed total supply
@@ -40,6 +51,23 @@ func NewLedger(totalSupply core.Amount) *Ledger {
 		txLog:       make([]*TxRecord, 0, 1024),
 		totalSupply: totalSupply,
 	}
+}
+
+// SetPersisters wires optional callbacks for persistent storage.
+// balanceFn is called after every Credit/Debit/Transfer/BurnSupply.
+// metaFn is called after every BurnFromProtocol / BurnSupply to save burned/supply totals.
+func (l *Ledger) SetPersisters(balanceFn BalancePersister, metaFn MetaPersister) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.persistBalance = balanceFn
+	l.persistMeta = metaFn
+}
+
+// SetBalancePersister wires only the balance persistence callback (meta is a no-op if unset).
+func (l *Ledger) SetBalancePersister(fn BalancePersister) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.persistBalance = fn
 }
 
 // Credit adds $ALPHA to an address (e.g., block rewards, genesis funding)
@@ -60,6 +88,8 @@ func (l *Ledger) Credit(addr core.Address, amount core.Amount) error {
 		Amount:    amount,
 		Timestamp: time.Now().Unix(),
 	})
+
+	l.saveBalance(addr)
 	return nil
 }
 
@@ -84,6 +114,8 @@ func (l *Ledger) Debit(addr core.Address, amount core.Amount) error {
 		Amount:    amount,
 		Timestamp: time.Now().Unix(),
 	})
+
+	l.saveBalance(addr)
 	return nil
 }
 
@@ -118,6 +150,9 @@ func (l *Ledger) Transfer(from, to core.Address, amount core.Amount, memo string
 		Memo:      memo,
 		Timestamp: time.Now().Unix(),
 	})
+
+	l.saveBalance(from)
+	l.saveBalance(to)
 	return txID, nil
 }
 
@@ -154,6 +189,9 @@ func (l *Ledger) BurnSupply(addr core.Address, amount core.Amount) error {
 		Memo:      "protocol burn",
 		Timestamp: time.Now().Unix(),
 	})
+
+	l.saveBalance(addr)
+	l.saveMeta()
 	return nil
 }
 
@@ -176,6 +214,8 @@ func (l *Ledger) BurnFromProtocol(amount core.Amount) error {
 		Memo:      "protocol fee burn",
 		Timestamp: time.Now().Unix(),
 	})
+
+	l.saveMeta()
 	return nil
 }
 
@@ -191,6 +231,13 @@ func (l *Ledger) TotalBurned() core.Amount {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.totalBurned
+}
+
+// TotalSupply returns the current total supply (may decrease due to burns)
+func (l *Ledger) TotalSupply() core.Amount {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.totalSupply
 }
 
 // TxHistory returns the last n transaction records (all if n <= 0)
@@ -238,6 +285,50 @@ func (l *Ledger) Stats() map[string]interface{} {
 	}
 }
 
+// ForEachBalance calls fn for every account and its balance.
+// This can be used to bulk-persist all balances at startup or shutdown.
+func (l *Ledger) ForEachBalance(fn func(addr core.Address, amount core.Amount) error) error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	for addr, amount := range l.balances {
+		if err := fn(addr, amount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// LoadBalances bulk-loads account balances from a pre-scanned map.
+// Existing balances in the ledger are overwritten by the loaded values.
+// This is used at startup to restore state from BadgerDB.
+func (l *Ledger) LoadBalances(entries map[core.Address]core.Amount) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	loaded := 0
+	for addr, amount := range entries {
+		l.balances[addr] = amount
+		loaded++
+	}
+	if loaded > 0 {
+		log.Printf("💾 Ledger: loaded %d account balances from persistent store", loaded)
+	}
+	return nil
+}
+
+// SetTotalBurned restores the burned token count from persistent storage.
+func (l *Ledger) SetTotalBurned(amount core.Amount) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.totalBurned = amount
+}
+
+// SetTotalSupply restores the total supply from persistent storage.
+func (l *Ledger) SetTotalSupply(amount core.Amount) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.totalSupply = amount
+}
+
 // --- internal helpers ---
 
 func (l *Ledger) recordTx(tx *TxRecord) {
@@ -248,4 +339,31 @@ func (l *Ledger) genTxID(txType, seed string) string {
 	raw := fmt.Sprintf("%s:%s:%d", txType, seed, time.Now().UnixNano())
 	h := sha256.Sum256([]byte(raw))
 	return "tx_" + hex.EncodeToString(h[:])[:24]
+}
+
+// saveBalance calls the persistence callback (best-effort).
+// Caller must hold l.mu Lock.
+func (l *Ledger) saveBalance(addr core.Address) {
+	if l.persistBalance == nil {
+		return
+	}
+	if err := l.persistBalance(addr, l.balances[addr]); err != nil {
+		log.Printf("⚠️  Ledger: persist balance for %s: %v", addr, err)
+	}
+}
+
+// saveMeta calls the metadata persistence callback (best-effort).
+// Caller must hold l.mu Lock.
+func (l *Ledger) saveMeta() {
+	if l.persistMeta == nil {
+		return
+	}
+	burned := fmt.Sprintf("%d", l.totalBurned)
+	supply := fmt.Sprintf("%d", l.totalSupply)
+	if err := l.persistMeta("total_burned", []byte(burned)); err != nil {
+		log.Printf("⚠️  Ledger: persist meta total_burned: %v", err)
+	}
+	if err := l.persistMeta("total_supply", []byte(supply)); err != nil {
+		log.Printf("⚠️  Ledger: persist meta total_supply: %v", err)
+	}
 }
