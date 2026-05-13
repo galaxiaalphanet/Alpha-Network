@@ -73,7 +73,36 @@
 - NewServerPhase4: full P2P wiring
 - Tested: 2 nodes discover each other, broadcast 15 blocks between them
 
-### 🔴 NEXT: IPFS Integration (#9)
+### 🔴 CRITICAL #3: Deploy $ALPHA SPL Token on Solana Devnet — SKIPPED (faucet blocked)
+
+---
+
+### ✅ GROWTH #8: P2P Networking — DONE
+- P2PNode: PeerStore + Syncer + Block gossip in one orchestrator
+- Bootstrap: auto-discovers peers from seed list
+- Block broadcast: produced blocks sent to all known peers via POST /api/v1/p2p/block
+- Block receive: validate + incorporate peer blocks into local chain
+- Block gossip: re-forward received blocks (excluding sender)
+- Background loops: announce every 30s, sync every 60s
+- Rate limiter: exempted /api/v1/blocks/, /api/v1/peers, /api/v1/sync, /api/v1/p2p/
+- CLI flags: --seed-peers (comma-separated host:port), --announce-addr
+- NewServerPhase4: full P2P wiring
+- Tested: 2 nodes discover each other, broadcast 15 blocks between them
+
+### ✅ GROWTH #9: IPFS Integration — DONE
+- IPFS client wrapping Kubo HTTP API (localhost:5001)
+- Local content-addressed fallback using SHA256
+- REST endpoints: POST /api/v1/ipfs/add, GET /api/v1/ipfs/{cid}, POST pin, DELETE unpin
+- Auto-detects IPFS availability, falls back to local storage
+- Tested: add → CID, retrieve by CID, pin content
+
+### ✅ GROWTH #10: Governance Module — DONE
+- Full proposal lifecycle: pending → active → passed/rejected → executed
+- Voting power: stake + reputation bonus (up to +50%)
+- Quorum: >50% total stake, Threshold: >66% yes votes
+- REST endpoints: POST propose/vote, GET list/id/votes/stats, POST execute
+- Tick() advances state each block via BlockProducer
+- Tested: proposal created, voting opens at block 15, vote with 15000 power
 
 ---
 
