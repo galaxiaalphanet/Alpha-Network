@@ -130,16 +130,18 @@ type taskResult struct {
 // RewardCallback is invoked when a task completes, enabling chain-level wiring.
 type RewardCallback func(taskID string, agentID core.AgentID, reward core.Amount)
 
+// SlashCallback is invoked when an agent is slashed for submitting a bad result.
+type SlashCallback func(taskID string, agentID core.AgentID, slashAmount core.Amount)
+
 // Marketplace implements the full task lifecycle for Alpha Network Phase 2.
 type Marketplace struct {
-	mu      sync.RWMutex
-	tasks   map[string]*core.Task    // taskID -> task
-	results map[string][]*taskResult // taskID -> submitted results
-	queue   *TaskQueue
-	ledger  *ledger.Ledger
-
-	// rewardCallback is called when a task completes (optional, for chain integration)
-	rewardCallback RewardCallback
+	mu            sync.RWMutex
+	tasks         map[string]*core.Task    // taskID -> task
+	results       map[string][]*taskResult // taskID -> submitted results
+	queue         *TaskQueue
+	ledger        *ledger.Ledger
+	rewardCallback RewardCallback // called when a task completes (optional)
+	slashCallback  SlashCallback  // called when an agent is slashed (optional)
 }
 
 // NewMarketplace creates a Marketplace wired to a ledger for reward payouts.
@@ -158,6 +160,13 @@ func (m *Marketplace) SetRewardCallback(cb RewardCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rewardCallback = cb
+}
+
+// SetSlashCallback registers a callback invoked when an agent is slashed.
+func (m *Marketplace) SetSlashCallback(cb SlashCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.slashCallback = cb
 }
 
 // PostTask validates and enqueues a new task. The task must have a non-empty TaskID,
@@ -362,6 +371,8 @@ func (m *Marketplace) VerifyResult(taskID string, results map[core.AgentID]strin
 
 // CompleteTask marks a task as completed with the given consensus hash and triggers
 // reward distribution to all agents that submitted the correct result.
+// Outliers (agents who submitted a wrong result) are slashed 10% of the task reward
+// from their ledger balance as an economic penalty for bad behavior.
 func (m *Marketplace) CompleteTask(taskID string, consensusHash string) error {
 	if taskID == "" {
 		return errors.New("taskID cannot be empty")
@@ -379,9 +390,12 @@ func (m *Marketplace) CompleteTask(taskID string, consensusHash string) error {
 
 	// Find agents that submitted the winning hash
 	var winners []core.AgentID
+	var outliers []core.AgentID
 	for _, r := range m.results[taskID] {
 		if r.resultHash == consensusHash {
 			winners = append(winners, r.agentID)
+		} else {
+			outliers = append(outliers, r.agentID)
 		}
 	}
 
@@ -390,17 +404,37 @@ func (m *Marketplace) CompleteTask(taskID string, consensusHash string) error {
 		rewardPerWinner = task.Reward / core.Amount(len(winners))
 	}
 
+	// Slash penalty: 10% of task reward per outlier
+	slashPerOutlier := core.Amount(float64(task.Reward) * core.SlashPenalty)
+	if slashPerOutlier < 1 {
+		slashPerOutlier = 1 // minimum slash of 1 base unit
+	}
+
 	cb := m.rewardCallback
+	scb := m.slashCallback
+	// Snapshot ledger reference before releasing lock
+	led := m.ledger
 	m.mu.Unlock()
 
 	// Distribute rewards via ledger (outside lock to avoid deadlock)
 	for _, agentID := range winners {
-		if m.ledger != nil && rewardPerWinner > 0 {
+		if led != nil && rewardPerWinner > 0 {
 			agentAddr := core.Address("alpha_agent_" + string(agentID))
-			_ = m.ledger.Credit(agentAddr, rewardPerWinner)
+			_ = led.Credit(agentAddr, rewardPerWinner)
 		}
 		if cb != nil {
 			cb(taskID, agentID, rewardPerWinner)
+		}
+	}
+
+	// Slash outliers — deduct penalty from their ledger balance
+	for _, agentID := range outliers {
+		if led != nil && slashPerOutlier > 0 {
+			agentAddr := core.Address("alpha_agent_" + string(agentID))
+			_ = led.Debit(agentAddr, slashPerOutlier)
+		}
+		if scb != nil {
+			scb(taskID, agentID, slashPerOutlier)
 		}
 	}
 
