@@ -301,6 +301,15 @@ func (p *BlockProducer) produceBlock() {
 			// Log error but don't disrupt block production
 			_ = err
 		}
+
+		// Periodic ledger snapshot every 100 blocks for faster recovery
+		if nextHeight%100 == 0 {
+			balances := p.ledger.SnapshotBalances()
+			if err := s.PutSnapshot(nextHeight, balances, p.ledger.TotalBurned(), p.ledger.TotalSupply()); err != nil {
+				// Non-fatal: snapshot failure doesn't halt block production
+				_ = err
+			}
+		}
 	}
 
 	// Assign pending tasks to the block validator each block

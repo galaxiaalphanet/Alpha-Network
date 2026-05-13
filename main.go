@@ -99,23 +99,37 @@ func main() {
 		}
 		log.Printf("✅ Chain initialized: %s", genConfig.ChainID)
 	} else {
-		// Restore ledger balances from BadgerDB
-		balances, err := st.ScanBalanceEntries()
-		if err != nil {
-			log.Printf("⚠️  Could not scan balance entries: %v", err)
-		} else if len(balances) > 0 {
-			if err := l.LoadBalances(balances); err != nil {
-				log.Printf("⚠️  Could not load balances: %v", err)
+		// Restore ledger balances from BadgerDB — prefer snapshot for speed
+		snapHeight, snapBalances, snapBurned, snapSupply, snapErr := st.GetLatestSnapshot()
+		if snapErr == nil && len(snapBalances) > 0 {
+			// Load from snapshot (fast path)
+			if err := l.LoadBalances(snapBalances); err != nil {
+				log.Printf("⚠️  Could not load snapshot balances: %v", err)
+			}
+			l.SetTotalBurned(snapBurned)
+			l.SetTotalSupply(snapSupply)
+			log.Printf("♻️  Loaded snapshot at block %d: %d accounts", snapHeight, len(snapBalances))
+		} else {
+			// Fallback: scan all individual balance entries
+			balances, err := st.ScanBalanceEntries()
+			if err != nil {
+				log.Printf("⚠️  Could not scan balance entries: %v", err)
+			} else if len(balances) > 0 {
+				if err := l.LoadBalances(balances); err != nil {
+					log.Printf("⚠️  Could not load balances: %v", err)
+				}
+			}
+			log.Printf("♻️  Resuming existing chain (genesis block found, %d accounts loaded)", len(balances))
+		}
+		// Restore metadata if not already set from snapshot
+		if snapErr != nil {
+			if burned, metaErr := st.GetMeta("total_burned"); metaErr == nil {
+				var b int64
+				if _, parseErr := fmt.Sscanf(string(burned), "%d", &b); parseErr == nil {
+					l.SetTotalBurned(core.Amount(b))
+				}
 			}
 		}
-		// Also restore metadata
-		if burned, metaErr := st.GetMeta("total_burned"); metaErr == nil {
-			var b int64
-			if _, parseErr := fmt.Sscanf(string(burned), "%d", &b); parseErr == nil {
-				l.SetTotalBurned(core.Amount(b))
-			}
-		}
-		log.Printf("♻️  Resuming existing chain (genesis block found, %d accounts loaded)", len(balances))
 	}
 
 	// ── 6. Agent Registry ─────────────────────────────────────────────────────

@@ -70,6 +70,18 @@ func (l *Ledger) SetBalancePersister(fn BalancePersister) {
 	l.persistBalance = fn
 }
 
+// SnapshotBalances returns a copy of all account balances.
+// Used to create periodic snapshots without holding the lock for I/O.
+func (l *Ledger) SnapshotBalances() map[core.Address]core.Amount {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := make(map[core.Address]core.Amount, len(l.balances))
+	for k, v := range l.balances {
+		out[k] = v
+	}
+	return out
+}
+
 // Credit adds $ALPHA to an address (e.g., block rewards, genesis funding)
 // Returns an error only if amount is non-positive.
 func (l *Ledger) Credit(addr core.Address, amount core.Amount) error {
