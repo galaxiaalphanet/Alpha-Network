@@ -22,6 +22,7 @@ const (
 	prefixBalance    = "balance:"
 	prefixIntelRec   = "intel:"
 	prefixMeta       = "meta:"
+	prefixSnapshot   = "snapshot:"
 )
 
 // ErrNotFound is returned when a key doesn't exist in the store.
@@ -266,6 +267,70 @@ func (s *Store) GetIntelligenceRecords(agentID core.AgentID) ([]*data.Intelligen
 		records = append(records, &rec)
 	}
 	return records, nil
+}
+
+// PutSnapshot writes a ledger snapshot at the given block height.
+// The snapshot contains all account balances serialized as JSON.
+func (s *Store) PutSnapshot(blockHeight uint64, balances map[core.Address]core.Amount, totalBurned, totalSupply core.Amount) error {
+	snap := struct {
+		BlockHeight uint64                  `json:"block_height"`
+		Balances    map[core.Address]core.Amount `json:"balances"`
+		TotalBurned core.Amount              `json:"total_burned"`
+		TotalSupply core.Amount              `json:"total_supply"`
+	}{
+		BlockHeight: blockHeight,
+		Balances:    balances,
+		TotalBurned: totalBurned,
+		TotalSupply: totalSupply,
+	}
+	val, err := json.Marshal(snap)
+	if err != nil {
+		return fmt.Errorf("marshal snapshot: %w", err)
+	}
+	key := fmt.Sprintf("%s%020d", prefixSnapshot, blockHeight)
+	return s.Set([]byte(key), val)
+}
+
+// GetLatestSnapshot retrieves the most recent ledger snapshot.
+// Returns the block height, balances, and metadata. Returns ErrNotFound if no snapshot exists.
+func (s *Store) GetLatestSnapshot() (uint64, map[core.Address]core.Amount, core.Amount, core.Amount, error) {
+	var latestHeight uint64
+	var latestVal []byte
+
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte(prefixSnapshot)
+		opts.Reverse = true // newest first
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		if it.Seek([]byte(prefixSnapshot + "99999999999999999999")); it.ValidForPrefix([]byte(prefixSnapshot)) {
+			item := it.Item()
+			key := string(item.Key())
+			// Parse block height from key: "snapshot:00000000000000000123"
+			if _, scanErr := fmt.Sscanf(key, prefixSnapshot+"%020d", &latestHeight); scanErr != nil {
+				return scanErr
+			}
+			var copyErr error
+			latestVal, copyErr = item.ValueCopy(nil)
+			return copyErr
+		}
+		return ErrNotFound
+	})
+	if err != nil {
+		return 0, nil, 0, 0, err
+	}
+
+	var snap struct {
+		BlockHeight uint64                  `json:"block_height"`
+		Balances    map[core.Address]core.Amount `json:"balances"`
+		TotalBurned core.Amount              `json:"total_burned"`
+		TotalSupply core.Amount              `json:"total_supply"`
+	}
+	if err := json.Unmarshal(latestVal, &snap); err != nil {
+		return 0, nil, 0, 0, fmt.Errorf("unmarshal snapshot: %w", err)
+	}
+	return snap.BlockHeight, snap.Balances, snap.TotalBurned, snap.TotalSupply, nil
 }
 
 // HasGenesisBlock returns true if the genesis block (height 0) is stored.
