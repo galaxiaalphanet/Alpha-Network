@@ -13,6 +13,7 @@ import (
 
 	"github.com/alpha-network/alpha/chain/agent"
 	"github.com/alpha-network/alpha/chain/core"
+	alphacrypto "github.com/alpha-network/alpha/chain/crypto"
 	"github.com/alpha-network/alpha/chain/data"
 	"github.com/alpha-network/alpha/chain/ledger"
 	"github.com/alpha-network/alpha/chain/monitor"
@@ -151,6 +152,9 @@ func (s *Server) routes() {
 
 	// Block sync (Phase 4)
 	s.mux.HandleFunc("/api/v1/sync/status", s.handleSyncStatus)
+
+	// ZK Proof endpoint (Phase 4)
+	s.mux.HandleFunc("/api/v1/proof/poi", s.handlePoIProof)
 
 	// --- v0.2 endpoints ---
 
@@ -856,6 +860,50 @@ func (s *Server) handleSyncStatus(w http.ResponseWriter, r *http.Request) {
 		"local_height": localHeight,
 		"peers":        len(peers),
 		"synced":       true, // local node is always considered synced with itself
+	})
+}
+
+// POST /api/v1/proof/poi — generate a ZK Proof of Intelligence
+// Accepts latencyMs, entropyScore, and agentID. Returns a Groth16 BN254
+// ZK proof certifying the inference latency is within valid AI agent bounds.
+func (s *Server) handlePoIProof(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+
+	var req struct {
+		LatencyMs    int64   `json:"latency_ms"`
+		EntropyScore float64 `json:"entropy_score"`
+		AgentID      string  `json:"agent_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.LatencyMs <= 0 {
+		writeError(w, http.StatusBadRequest, "latency_ms must be positive")
+		return
+	}
+	if req.EntropyScore <= 0 {
+		req.EntropyScore = 0.85 // default entropy for AI output
+	}
+
+	proofData, err := alphacrypto.GeneratePoIProof(req.LatencyMs, req.EntropyScore)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "proof generation failed: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"proof": map[string]interface{}{
+			"proof_bytes":   fmt.Sprintf("%x", proofData.ProofBytes),
+			"public_inputs": proofData.PublicInputs,
+			"vk_bytes":      fmt.Sprintf("%x", proofData.VKBytes),
+		},
+		"agent_id": req.AgentID,
+		"verified": false, // client-side proof; verification happens on-chain
 	})
 }
 
