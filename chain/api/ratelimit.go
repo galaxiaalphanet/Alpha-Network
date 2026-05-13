@@ -187,6 +187,15 @@ func extractIP(r *http.Request) string {
 // otherwise the per-IP limit applies.
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Phase 4: P2P, sync, and block endpoints are internal peer comm — no rate limiting
+		if strings.HasPrefix(r.URL.Path, "/api/v1/blocks/") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/peers") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/sync") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/p2p/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		agentID := strings.TrimSpace(r.Header.Get("agent_id"))
 
 		var ok bool
