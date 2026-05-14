@@ -209,6 +209,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/intelligence/query", s.handleIntelligenceQuery)
 	s.mux.HandleFunc("/api/v1/intelligence/stats", s.handleIntelligenceStats)
 	s.mux.HandleFunc("/api/v1/intelligence/top", s.handleIntelligenceTop)
+	s.mux.HandleFunc("/api/v1/intelligence/subscribe", s.handleIntelligenceSubscribe)
 
 	// Account ledger
 	s.mux.HandleFunc("/api/v1/accounts/", s.handleAccountBalance)
@@ -839,7 +840,85 @@ func (s *Server) handleIntelligenceQuery(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// --- P2P Peer handlers (Phase 4) ---
+// POST /api/v1/intelligence/subscribe — paid intelligence data subscription
+// External parties pay 10 $ALPHA per query. Registered agents query for free.
+// Request body: {"agent_id":"...", "from_address":"alpha1..."}
+// If from_address is provided, 10 $ALPHA is burned from that address.
+// If the caller is a registered agent, the query is free.
+// POST /api/v1/intelligence/subscribe — paid intelligence data subscription
+// External parties pay 10 $ALPHA per query. Registered agents query for free.
+// Request: POST {"from_address":"alpha1..."}  → 10 $ALPHA burned from that address
+// If no from_address (registered agent), query is free.
+// Returns: full intelligence report: stats + top agents + network health
+func (s *Server) handleIntelligenceSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	if s.oracle == nil {
+		writeError(w, http.StatusServiceUnavailable, "intelligence oracle not available")
+		return
+	}
+
+	var req struct {
+		FromAddress string `json:"from_address"`
+		Capability  string `json:"capability,omitempty"`
+		Limit       int    `json:"limit,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	const queryFee = core.Amount(10) // 10 $ALPHA per query for external parties
+	isRegistered := false
+
+	if req.FromAddress != "" {
+		// Check if this address belongs to a registered agent
+		_, err := s.registry.GetAgentByAddress(core.Address(req.FromAddress))
+		if err != nil {
+			// External party — charge 10 $ALPHA
+			if s.ledger != nil {
+				if err := s.ledger.BurnSupply(core.Address(req.FromAddress), queryFee); err != nil {
+					writeError(w, http.StatusPaymentRequired,
+						"payment failed — 10 $ALPHA required: "+err.Error())
+					return
+				}
+			}
+		} else {
+			isRegistered = true
+		}
+	}
+
+	// Gather intelligence data
+	cap := req.Capability
+	if cap == "" {
+		cap = "inference"
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	topAgents := s.oracle.QueryTopAgents(cap, limit, 1000)
+	stats := s.oracle.QueryNetworkStats(1000)
+
+	resp := map[string]interface{}{
+		"success":       true,
+		"paid":          !isRegistered,
+		"fee_charged":   0,
+		"capability":    cap,
+		"top_agents":    topAgents,
+		"stats":         stats,
+		"queried_at":    time.Now().Unix(),
+	}
+
+	if !isRegistered {
+		resp["fee_charged"] = int(queryFee)
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
 
 // GET /api/v1/peers — return known peer list
 func (s *Server) handlePeerList(w http.ResponseWriter, r *http.Request) {
