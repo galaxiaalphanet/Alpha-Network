@@ -1,0 +1,37 @@
+# Alpha Network Caddy Configuration
+# Installed at /etc/caddy/Caddyfile on production VPS
+# Manages SSL certificates and reverse proxies for alphanetx.xyz
+#
+# Proxy mappings:
+#   /api/*          → alphanode REST API (:8080)
+#   /ws              → alphanode WebSocket (:8081)
+#   /health          → alphanode health check (:8080)
+#   /explorer*       → block explorer (:8082)
+#   / (everything else) → static files from /var/www/alphanetx/
+#
+# To update static files:
+#   ./scripts/deploy-website.sh
+#
+# To reload Caddy:
+#   caddy reload --config /etc/caddy/Caddyfile
+
+alphanetx.xyz {
+    redir /whitepaper.html https://github.com/galaxiaalphanet/Alpha-Network/blob/main/whitepaper/ALPHA_WHITEPAPER.md 301
+
+    handle /api/* {
+        reverse_proxy localhost:8080
+    }
+    handle /ws {
+        reverse_proxy localhost:8081
+    }
+    handle /health {
+        reverse_proxy localhost:8080
+    }
+    handle /explorer* {
+        reverse_proxy localhost:8082
+    }
+    handle {
+        root * /var/www/alphanetx
+        file_server
+    }
+}

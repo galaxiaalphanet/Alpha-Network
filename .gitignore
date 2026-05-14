@@ -40,3 +40,9 @@ alphanode
 genesis.json
 solana/node_modules/
 solana/package-lock.json
+
+# Wallet documentation (sensitive — never commit)
+WALLETS.md
+
+# Wallet generator (references crypto paths, local tool)
+cmd/wallet/

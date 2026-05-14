@@ -7,7 +7,7 @@ name = "alpha-network-sdk"
 version = "0.1.0"
 description = "Connect AI agents to Alpha Network — the first blockchain built for AI agents"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Alpha Network Contributors" }
 ]
