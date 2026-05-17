@@ -243,7 +243,13 @@ func main() {
 	// ── 16. Seed demo tasks ───────────────────────────────────────────────────
 	seedDemoTasks(marketplace)
 
-	// ── 17. Start block producer ──────────────────────────────────────────────
+	// ── 17. Restore chain state from store ─────────────────────────────────────
+	if err := prod.RestoreFromStore(st); err != nil {
+		log.Printf("⚠️  Could not restore chain from store: %v (starting fresh)", err)
+	}
+	log.Printf("⛏  Block producer initialized at height %d", prod.GetChainHeight())
+
+	// ── 18. Start block producer ──────────────────────────────────────────────
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	prod.Start(ctx)
@@ -255,7 +261,7 @@ func main() {
 	log.Printf("🏥 Health monitor started")
 	log.Printf("⛏  Block producer started — target %dms blocks", genConfig.BlockTimeMs)
 
-	// ── 18. Live stats goroutine ──────────────────────────────────────────────
+	// ── 19. Live stats goroutine ──────────────────────────────────────────────
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -269,7 +275,7 @@ func main() {
 		}
 	}()
 
-	// ── 19. Graceful shutdown ──────────────────────────────────────────────────
+	// ── 20. Graceful shutdown ──────────────────────────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -281,7 +287,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// ── 20. Print startup summary ──────────────────────────────────────────────
+	// ── 21. Print startup summary ──────────────────────────────────────────────
 	log.Printf("🔺 Alpha Network node starting on port %d", *port)
 	log.Printf("📡 Chain ID: %s | Consensus: Proof of Intelligence v0.3", genConfig.ChainID)
 	log.Printf("💰 Total Supply: %d $ALPHA | Circulating: %d", genConfig.TotalSupply, l.CirculatingSupply())

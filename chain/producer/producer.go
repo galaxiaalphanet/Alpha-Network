@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -99,6 +100,103 @@ func (p *BlockProducer) SetStore(s *store.Store) {
 	p.mu.Unlock()
 }
 
+// RestoreFromStore loads the chain state from persistent storage on restart.
+// It restores the latest block height and the tip block so production can resume
+// from where it left off instead of starting from 0.
+func (p *BlockProducer) RestoreFromStore(st *store.Store) error {
+	val, err := st.GetMeta("latest_height")
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			log.Printf("♻️  No persisted blocks found — starting fresh")
+			return nil
+		}
+		return fmt.Errorf("get latest height meta: %w", err)
+	}
+
+	var latestHeight uint64
+	if _, parseErr := fmt.Sscanf(string(val), "%d", &latestHeight); parseErr != nil {
+		// Try the old binary format as fallback
+		log.Printf("⚠️  Could not parse latest height from meta, scanning blocks...")
+		return p.restoreByScanning(st)
+	}
+
+	if latestHeight == 0 {
+		log.Printf("♻️  Chain at genesis (height 0), no blocks to restore")
+		return nil
+	}
+
+	// Load tip block
+	tipBlock, err := st.GetBlock(latestHeight)
+	if err != nil {
+		log.Printf("⚠️  Could not load tip block %d from store (%v), scanning instead...", latestHeight, err)
+		return p.restoreByScanning(st)
+	}
+
+	// Load genesis block (kept in memory for chain references)
+	genesisBlock, err := st.GetBlock(0)
+	if err != nil {
+		return fmt.Errorf("load genesis block: %w", err)
+	}
+
+	p.mu.Lock()
+	p.chain = []*core.Block{genesisBlock, tipBlock}
+	atomic.StoreUint64(&p.height, latestHeight)
+	p.store = st
+	p.mu.Unlock()
+
+	log.Printf("♻️  Chain restored: height %d, tip hash %s...", latestHeight, tipBlock.Hash[:16])
+	return nil
+}
+
+// restoreByScanning scans all blocks in the store to rebuild the in-memory chain.
+// Used as a fallback when the latest_height meta key is missing.
+func (p *BlockProducer) restoreByScanning(st *store.Store) error {
+	// Scan all block keys
+	vals, err := st.Scan([]byte("block:"))
+	if err != nil {
+		return fmt.Errorf("scan blocks: %w", err)
+	}
+
+	if len(vals) == 0 {
+		log.Printf("♻️  No blocks found in store — starting fresh")
+		return nil
+	}
+
+	blocks := make([]*core.Block, 0, len(vals))
+	for _, v := range vals {
+		var b core.Block
+		if err := json.Unmarshal(v, &b); err != nil {
+			continue
+		}
+		blocks = append(blocks, &b)
+	}
+
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	// Sort by height (stable because we scanned in order)
+	// Sort by height ascending
+	for i := 0; i < len(blocks); i++ {
+		for j := i + 1; j < len(blocks); j++ {
+			if blocks[j].Height < blocks[i].Height {
+				blocks[i], blocks[j] = blocks[j], blocks[i]
+			}
+		}
+	}
+
+	tipHeight := blocks[len(blocks)-1].Height
+
+	p.mu.Lock()
+	p.chain = blocks
+	atomic.StoreUint64(&p.height, tipHeight)
+	p.store = st
+	p.mu.Unlock()
+
+	log.Printf("♻️  Chain restored by scanning: height %d (%d blocks loaded)", tipHeight, len(blocks))
+	return nil
+}
+
 // SetGovModule wires the governance module for per-block state advancement.
 func (p *BlockProducer) SetGovModule(g *governance.Module) {
 	p.mu.Lock()
@@ -180,6 +278,8 @@ func (p *BlockProducer) IncorporateExternalBlock(block *core.Block) error {
 	// Persist to store
 	if p.store != nil {
 		_ = p.store.PutBlock(block)
+		heightStr := fmt.Sprintf("%d", block.Height)
+		_ = p.store.PutMeta("latest_height", []byte(heightStr))
 	}
 
 	// Broadcast via WebSocket
@@ -227,14 +327,27 @@ func (p *BlockProducer) SubmitTransaction(tx *core.Transaction) error {
 	return nil
 }
 
-// GetBlock returns the block at the given height, or nil if out of range
+// GetBlock returns the block at the given height, or nil if out of range.
+// Falls back to the persistent store when the block is not in memory.
 func (p *BlockProducer) GetBlock(height uint64) *core.Block {
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if int(height) >= len(p.chain) {
-		return nil
+	inChain := int(height) < len(p.chain)
+	if inChain {
+		block := p.chain[height]
+		p.mu.RUnlock()
+		return block
 	}
-	return p.chain[height]
+	s := p.store
+	p.mu.RUnlock()
+
+	// Try loading from store
+	if s != nil {
+		block, err := s.GetBlock(height)
+		if err == nil {
+			return block
+		}
+	}
+	return nil
 }
 
 // LatestBlock returns the current chain tip block
@@ -399,6 +512,12 @@ func (p *BlockProducer) produceBlock() {
 		if err := s.PutBlock(block); err != nil {
 			// Log error but don't disrupt block production
 			_ = err
+		}
+
+		// Persist latest height for crash recovery
+		heightStr := fmt.Sprintf("%d", nextHeight)
+		if metaErr := s.PutMeta("latest_height", []byte(heightStr)); metaErr != nil {
+			_ = metaErr
 		}
 
 		// Periodic ledger snapshot every 100 blocks for faster recovery
