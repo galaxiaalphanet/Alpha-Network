@@ -829,6 +829,7 @@ const intelligenceTmpl = `<!DOCTYPE html><html lang="en"><head><meta charset="UT
     <div class="pagination" id="intelPagination"></div>
   </div>
 </div>
+{{end}}
 ` + footerHTML + `
 <script>
 var intelTopAgents=[],intelPageSize=10,intelPage=1;
