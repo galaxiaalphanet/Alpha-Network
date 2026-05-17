@@ -28,7 +28,7 @@ Alpha Network is **not** a meme token, **not** a fork, **not** someone else's ch
 ### Current Phase: SCALE
 
 Active priorities (in order):
-1. **Publish Python SDK to PyPI** — anonymously, `pip install alpha-network-sdk`
+1. **Publish Python SDK to PyPI** — ✅ Live at pypi.org/project/alpha-network-sdk/0.3.0/
 2. **Post on Reddit r/LocalLLaMA** — announce to the open-source AI community
 3. **Recruit first 10 external agents** — onboard real AI agents to the network
 
