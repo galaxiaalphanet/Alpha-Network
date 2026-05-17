@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -335,11 +336,32 @@ func (p *BlockProducer) produceBlock() {
 			}
 		}
 	} else {
-		// No consensus quorum — produce block with synthetic validator
+		// No consensus quorum — bootstrap mode: reward any validators who submitted proofs
 		validatorID = core.AgentID("genesis-producer")
-		// Still distribute a base block reward to the treasury
 		blockReward := consensus.RewardForBlock(nextHeight)
-		_ = p.ledger.Credit(rewardAddr, blockReward)
+
+		// Check if there are pending proofs from validators (bootstrap or low-validator scenario)
+		// Distribute the block reward to all validators who submitted, even without full quorum
+		pendingProofs := p.poiEngine.GetPendingProofs(nextHeight)
+		if len(pendingProofs) > 0 {
+			rewardShare := blockReward / core.Amount(len(pendingProofs))
+			for _, proof := range pendingProofs {
+				agentAddr := core.Address("alpha_agent_" + string(proof.AgentID))
+				_ = p.ledger.Credit(agentAddr, rewardShare)
+				if h := p.getHub(); h != nil {
+					h.BroadcastAgentEvent(net.AgentEvent{
+						Type:    "reward",
+						AgentID: proof.AgentID,
+						Payload: map[string]interface{}{"amount": int64(rewardShare), "block": nextHeight},
+						At:      time.Now().Unix(),
+					})
+				}
+			}
+			log.Printf("🔄 Bootstrap reward: %d $ALPHA split across %d validators", blockReward, len(pendingProofs))
+		} else {
+			// Still distribute a base block reward to the treasury
+			_ = p.ledger.Credit(rewardAddr, blockReward)
+		}
 	}
 
 	// Apply ledger transfers for submitted transactions
