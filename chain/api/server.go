@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alpha-network/alpha/chain/agent"
+	"github.com/alpha-network/alpha/chain/consensus"
 	"github.com/alpha-network/alpha/chain/core"
 	alphacrypto "github.com/alpha-network/alpha/chain/crypto"
 	"github.com/alpha-network/alpha/chain/data"
@@ -34,6 +35,7 @@ type Server struct {
 	producer    *producer.BlockProducer
 	oracle      *data.IntelligenceOracle
 	marketplace *tasks.Marketplace
+	poiEngine   *consensus.PoIEngine
 	hub         *net.Hub
 	mon         *monitor.Monitor
 	rl          *RateLimiter
@@ -145,6 +147,12 @@ func (s *Server) SetIPFSClient(c *ipfs.Client) {
 // SetGovModule attaches a governance module to the server.
 func (s *Server) SetGovModule(g *governance.Module) {
 	s.govModule = g
+}
+
+// SetPoiEngine attaches the Proof of Intelligence engine.
+// Required for agent registration to automatically register as validators.
+func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
+	s.poiEngine = engine
 }
 
 // Start launches the API server
@@ -279,6 +287,13 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	if s.ledger != nil && req.Stake > 0 {
 		agentAddr := core.Address("alpha_agent_" + string(identity.AgentID))
 		_ = s.ledger.Credit(agentAddr, req.Stake)
+	}
+
+	// Register as a PoI validator (so the agent can earn block rewards)
+	if s.poiEngine != nil && req.Stake >= core.MinStake {
+		if err := s.poiEngine.RegisterValidator(identity); err != nil {
+			log.Printf("⚠️  Could not register agent %s as validator: %v", identity.AgentID, err)
+		}
 	}
 
 	// Update producer agent count
@@ -693,7 +708,17 @@ func (s *Server) handleAccountBalance(w http.ResponseWriter, r *http.Request) {
 
 	var balance core.Amount
 	if s.ledger != nil {
+		// Try direct lookup first
 		balance = s.ledger.Balance(address)
+
+		// If balance is 0 and address looks like an agent_id (alpha1...), try alpha_agent_ prefix
+		if balance == 0 && strings.HasPrefix(string(address), "alpha1") {
+			prefixed := core.Address("alpha_agent_" + string(address))
+			altBalance := s.ledger.Balance(prefixed)
+			if altBalance > 0 {
+				balance = altBalance
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -1299,6 +1324,7 @@ func (s *Server) handleSyncStatus(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/proof/poi — generate a ZK Proof of Intelligence
 // Accepts latencyMs, entropyScore, and agentID. Returns a Groth16 BN254
 // ZK proof certifying the inference latency is within valid AI agent bounds.
+// Also submits the proof to the PoI consensus engine so the agent earns rewards.
 func (s *Server) handlePoIProof(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "POST required")
@@ -1321,22 +1347,55 @@ func (s *Server) handlePoIProof(w http.ResponseWriter, r *http.Request) {
 	if req.EntropyScore <= 0 {
 		req.EntropyScore = 0.85 // default entropy for AI output
 	}
+	if req.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id required")
+		return
+	}
 
+	// Generate ZK proof
 	proofData, err := alphacrypto.GeneratePoIProof(req.LatencyMs, req.EntropyScore)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "proof generation failed: "+err.Error())
 		return
 	}
 
+	// Submit proof to PoI consensus engine so agent earns block rewards
+	submitted := false
+	if s.poiEngine != nil {
+		blockHeight := uint64(0)
+		if s.producer != nil {
+			blockHeight = s.producer.GetChainHeight()
+		}
+
+		// Current block height + 1 (for the next block consensus round)
+		targetHeight := blockHeight + 1
+
+		poiProof := &core.PoIProof{
+			AgentID:        core.AgentID(req.AgentID),
+			BlockHeight:    targetHeight,
+			CommitmentHash: fmt.Sprintf("zk-%x", proofData.ProofBytes[:8]),
+			RevealProof:    fmt.Sprintf("poi-%d-%d", req.LatencyMs, int(req.EntropyScore*100)),
+			LatencyMs:      req.LatencyMs,
+			Signature:      fmt.Sprintf("sig-%x", proofData.ProofBytes[:4]),
+		}
+
+		if err := s.poiEngine.SubmitProof(poiProof); err != nil {
+			log.Printf("⚠️  PoI proof submission failed: %v", err)
+			submitted = false
+		} else {
+			submitted = true
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"success":   true,
+		"submitted": submitted,
 		"proof": map[string]interface{}{
 			"proof_bytes":   fmt.Sprintf("%x", proofData.ProofBytes),
 			"public_inputs": proofData.PublicInputs,
 			"vk_bytes":      fmt.Sprintf("%x", proofData.VKBytes),
 		},
 		"agent_id": req.AgentID,
-		"verified": false, // client-side proof; verification happens on-chain
 	})
 }
 

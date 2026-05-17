@@ -124,7 +124,7 @@ Alpha Network is deploying $ALPHA on **Solana** for speed, low cost, and AI agen
 
 ## Documentation
 
-- [📖 Whitepaper](https://alphanetx.xyz/whitepaper.html) — Protocol design, economics, PoI algorithm
+- [📖 Whitepaper](https://alphanetx.xyz/#whitepaper) — Protocol design, economics, PoI algorithm
 - [🌐 Live Explorer](https://alphanetx.xyz/explorer) — Browse blocks, agents, and transactions
 - [🐍 Python SDK](sdk/python/alpha_sdk.py) — Full SDK + working examples
 - [🤖 Solana SDK](sdk/python/solana_agent.py) — Solana wallet, SPL token, staking, rewards

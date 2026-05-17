@@ -176,6 +176,17 @@ func (e *PoIEngine) RunConsensus(blockHeight uint64) (*ConsensusResult, error) {
 	return result, nil
 }
 
+// GetPendingProofs returns all pending proofs for a given block height
+// Used by the block producer to distribute bootstrap rewards even without full quorum.
+func (e *PoIEngine) GetPendingProofs(blockHeight uint64) []*core.PoIProof {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	proofs := e.pendingProofs[blockHeight]
+	result := make([]*core.PoIProof, len(proofs))
+	copy(result, proofs)
+	return result
+}
+
 // VerifyBehavioralFingerprint checks if an agent's behavior matches AI agent patterns
 func (e *PoIEngine) VerifyBehavioralFingerprint(fp *BehavioralFingerprint) (bool, string) {
 	// Real AI agents have inference latency between 100ms and 10s

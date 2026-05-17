@@ -209,6 +209,9 @@ func main() {
 	server := api.NewServerPhase4(registry, l, prod, oracle, marketplace, hub, p2pNode, *port)
 	server.SetIPFSClient(ipfsClient)
 
+	// Wire PoI engine into API server (auto-registers agents as validators)
+	server.SetPoiEngine(poiEngine)
+
 	// Governance module
 	govModule := governance.NewModule(governance.DefaultConfig(), l, registry)
 	server.SetGovModule(govModule)
