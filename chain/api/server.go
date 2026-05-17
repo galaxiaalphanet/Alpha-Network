@@ -155,12 +155,26 @@ func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
 	s.poiEngine = engine
 }
 
+// corsMiddleware adds CORS headers to every response so browsers can call the API.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Start launches the API server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
 	log.Printf("Alpha Network API listening on %s", addr)
-	// Wrap mux with rate-limiting middleware
-	handler := s.rl.Middleware(s.mux)
+	// Wrap mux with CORS, then rate-limiting
+	handler := corsMiddleware(s.rl.Middleware(s.mux))
 	return http.ListenAndServe(addr, handler)
 }
 
