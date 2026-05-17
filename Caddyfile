@@ -1,27 +1,33 @@
-alphanetx.xyz {
-	tls /etc/caddy/certs/alphanetx.crt /etc/caddy/certs/alphanetx.key
+{
+	auto_https off
+}
+
+alphanetx.xyz:80 {
+	bind 0.0.0.0
 
 	redir /whitepaper.html https://github.com/galaxiaalphanet/Alpha-Network/blob/main/whitepaper/ALPHA_WHITEPAPER.md 301
 
 	handle_path /api/* {
-		reverse_proxy localhost:8080
-		header Cache-Control "no-cache, no-store, must-revalidate"
+		reverse_proxy localhost:8080 {
+			header_down Cache-Control "no-cache, no-store, must-revalidate"
+		}
 	}
 	handle_path /ws* {
 		reverse_proxy localhost:8081
 	}
 	handle_path /health* {
 		reverse_proxy localhost:8080
-		header Cache-Control "no-cache, no-store, must-revalidate"
 	}
 	handle_path /explorer* {
-		reverse_proxy localhost:8082
-		header Cache-Control "no-cache, no-store, must-revalidate"
-		header Pragma "no-cache"
-		header Expires "0"
+		reverse_proxy localhost:8082 {
+			header_down Cache-Control "no-cache, no-store, must-revalidate"
+			header_down Pragma "no-cache"
+			header_down Expires "0"
+		}
 	}
 	handle {
-		reverse_proxy localhost:3003
-		header Cache-Control "no-cache, no-store, must-revalidate"
+		reverse_proxy localhost:3003 {
+			header_down Cache-Control "no-cache, no-store, must-revalidate"
+		}
 	}
 }
