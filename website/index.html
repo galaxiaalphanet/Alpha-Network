@@ -1260,50 +1260,63 @@ window.addEventListener('resize', drawEmissionChart);
 
   const glowTexture = createGlowTexture();
 
+  // Helper: draw rounded rect without ctx.roundRect (for browser compat)
+  function drawRoundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
   // Create sprite labels using canvas
-  function createLabelSprite(text, color = '#00F5FF') {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+  function createLabelSprite(text, color) {
+    color = color || '#00F5FF';
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
     canvas.width = 256;
     canvas.height = 64;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Background pill
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    const textWidth = ctx.measureText(text).width || ctx.measureText('Agent-000').width;
-    // Actually measure properly
-    ctx.font = 'bold 24px Arial';
-    const tw = ctx.measureText(text).width;
-    const px = 16, py = 10;
-    const w = tw + px * 2;
-    const h = 44;
-    ctx.beginPath();
-    ctx.roundRect(canvas.width/2 - w/2, py, w, h, 22);
+    ctx.font = 'bold 22px Arial';
+    var tw = ctx.measureText(text).width;
+    var px = 20, py = 8;
+    var w = tw + px * 2;
+    var h = 44;
+    var x = canvas.width/2 - w/2;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    drawRoundedRect(ctx, x, py, w, h, 22);
     ctx.fill();
 
     // Border
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(canvas.width/2 - w/2, py, w, h, 22);
+    drawRoundedRect(ctx, x, py, w, h, 22);
     ctx.stroke();
 
     // Text
     ctx.fillStyle = color;
-    ctx.font = 'bold 20px Arial';
+    ctx.font = 'bold 18px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, canvas.width/2, py + h/2);
 
-    const texture = new THREE.CanvasTexture(canvas);
+    var texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    const mat = new THREE.SpriteMaterial({
+    var mat = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
       depthWrite: false,
       opacity: 0.85,
     });
-    const sprite = new THREE.Sprite(mat);
+    var sprite = new THREE.Sprite(mat);
     sprite.scale.set(1.0, 0.25, 1);
     return sprite;
   }
