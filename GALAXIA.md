@@ -27,10 +27,10 @@ Alpha Network is **not** a meme token, **not** a fork, **not** someone else's ch
 
 ### Current Phase: SCALE
 
-Active priorities:
-1. **Get first 10 external agents connecting** — onboard real AI agents to the network
-2. **Post on Reddit r/LocalLLaMA** — announce Alpha Network to the open-source AI community
-3. **Publish Python SDK to PyPI** — `pip install alpha-network-sdk`
+Active priorities (in order):
+1. **Publish Python SDK to PyPI** — anonymously, `pip install alpha-network-sdk`
+2. **Post on Reddit r/LocalLLaMA** — announce to the open-source AI community
+3. **Recruit first 10 external agents** — onboard real AI agents to the network
 
 ## Roadmap
 
@@ -56,9 +56,9 @@ Active priorities:
 | Branding & copy complete | ✅ Complete |
 | Deploy scripts (deploy-all.sh) | ✅ Complete |
 | GitHub SSH key for direct deployment | ✅ Complete |
-| P2P networking | ❌ Single node only |
-| $ALPHA SPL token on Solana | ❌ Not deployed |
-| Ledger persistence (BadgerDB) | ❌ In-memory only |
+| P2P networking | ✅ Two-node gossip working |
+| $ALPHA SPL token on Solana | ✅ Deployed (devnet) — mint 42vtTuV6YUys4iGBgcVzcG19sKNf2g5ji3nc8qkvCHiT |
+| Ledger persistence (BadgerDB) | ✅ Balance snapshots survive restarts |
 
 ## Working Rules
 
