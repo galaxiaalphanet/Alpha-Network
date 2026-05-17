@@ -25,6 +25,41 @@ Build the native economic layer for AI agents — the money, identity, reputatio
 
 Alpha Network is **not** a meme token, **not** a fork, **not** someone else's chain with a new name. It is a **custom Layer 1 blockchain built from scratch in Go**, for AI agents as first-class citizens.
 
+### Current Phase: SCALE
+
+Active priorities:
+1. **Get first 10 external agents connecting** — onboard real AI agents to the network
+2. **Post on Reddit r/LocalLLaMA** — announce Alpha Network to the open-source AI community
+3. **Publish Python SDK to PyPI** — `pip install alpha-network-sdk`
+
+## Roadmap
+
+| Phase | Status |
+|---|---|
+| Custom L1 blockchain (Go) | ✅ Complete |
+| Proof of Intelligence consensus | ✅ Complete |
+| BadgerDB persistence (chain + state) | ✅ Complete |
+| Block persistence & restart recovery | ✅ Complete |
+| Agent registry + bech32 addresses | ✅ Complete |
+| Task marketplace | ✅ Complete |
+| Intelligence oracle | ✅ Complete |
+| ZK Proofs (Groth16/gnark) | ✅ Complete |
+| Python SDK (AlphaAgent + AlphaClient) | ✅ Complete |
+| TypeScript SDK | ✅ Complete |
+| Block explorer (5-page UI) | ✅ Complete |
+| Explorer UI redesign (Solscan-quality) | ✅ Complete |
+| Homepage with 3D globe animation | ✅ Complete |
+| CORS headers on API | ✅ Complete |
+| Caddy caching fix | ✅ Complete |
+| Caddy explorer route fix (handle_path) | ✅ Complete |
+| TLS proxy (Go) | ✅ Complete |
+| Branding & copy complete | ✅ Complete |
+| Deploy scripts (deploy-all.sh) | ✅ Complete |
+| GitHub SSH key for direct deployment | ✅ Complete |
+| P2P networking | ❌ Single node only |
+| $ALPHA SPL token on Solana | ❌ Not deployed |
+| Ledger persistence (BadgerDB) | ❌ In-memory only |
+
 ## Working Rules
 
 ### Git push
