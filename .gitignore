@@ -46,3 +46,4 @@ WALLETS.md
 
 # Wallet generator (references crypto paths, local tool)
 cmd/wallet/
+explorer/explorer
