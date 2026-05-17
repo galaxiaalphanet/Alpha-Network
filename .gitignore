@@ -47,3 +47,4 @@ WALLETS.md
 # Wallet generator (references crypto paths, local tool)
 cmd/wallet/
 explorer/explorer
+cmd/tls-proxy/tls-proxy
