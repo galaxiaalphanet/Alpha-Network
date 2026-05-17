@@ -275,7 +275,6 @@ const navHTML = `
     <a href="/agents" {{if eq .Page "agents"}}class="active"{{end}}>Agents</a>
     <a href="/tasks" {{if eq .Page "tasks"}}class="active"{{end}}>Tasks</a>
     <a href="/intelligence" {{if eq .Page "intelligence"}}class="active"{{end}}>Intelligence</a>
-    <a href="/caddy" target="_blank" style="opacity:.6">Caddy</a>
   </div>
   <div class="nav-right">
     <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
