@@ -13,5 +13,5 @@ Usage:
 
 from .alpha_sdk import AlphaAgent, AlphaClient, AlphaAPIError, AlphaConnectionError
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 __all__ = ["AlphaAgent", "AlphaClient", "AlphaAPIError", "AlphaConnectionError"]
