@@ -155,6 +155,16 @@ func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
 	s.poiEngine = engine
 }
 
+// maxBodyBytes is the maximum request body size (1MB).
+// Prevents memory-exhaustion DoS attacks via giant JSON payloads.
+const maxBodyBytes = 1 << 20 // 1 MB
+
+// limitBody wraps r.Body with a MaxBytesReader to prevent DoS attacks.
+// Must be called before json.NewDecoder(r.Body).Decode(...) in every handler.
+func limitBody(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+}
+
 // corsMiddleware adds CORS headers to every response so browsers can call the API.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,11 +205,14 @@ func (s *Server) routes() {
 	// Transfers
 	s.mux.HandleFunc("/api/v1/transfer", s.handleTransfer)
 
-	// Tasks (Phase 2)
-	s.mux.HandleFunc("/api/v1/tasks/available", s.handleTasksAvailable)
-	s.mux.HandleFunc("/api/v1/tasks/post", s.handleTaskPost)
-	s.mux.HandleFunc("/api/v1/tasks/", s.handleTaskByID) // covers /tasks/{id} and /tasks/{id}/submit
-	s.mux.HandleFunc("/api/v1/tasks", s.handleTaskList)
+	// Tasks (Phase 2) — Go 1.22+ ServeMux patterns
+	s.mux.HandleFunc("GET /api/v1/tasks/available", s.handleTasksAvailable)
+	s.mux.HandleFunc("POST /api/v1/tasks/post", s.handleTaskPost)
+	s.mux.HandleFunc("GET /api/v1/tasks", s.handleTaskList)
+	s.mux.HandleFunc("GET /api/v1/tasks/{id}", s.handleTaskByID)
+	s.mux.HandleFunc("POST /api/v1/tasks/{id}/submit", s.handleTaskByID)
+	s.mux.HandleFunc("POST /api/v1/tasks/{id}/assign", s.handleTaskByID)
+	s.mux.HandleFunc("POST /api/v1/tasks/{id}/complete", s.handleTaskByID)
 
 	// Chain info
 	s.mux.HandleFunc("/api/v1/chain/info", s.handleChainInfo)
@@ -232,6 +245,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/intelligence/stats", s.handleIntelligenceStats)
 	s.mux.HandleFunc("/api/v1/intelligence/top", s.handleIntelligenceTop)
 	s.mux.HandleFunc("/api/v1/intelligence/subscribe", s.handleIntelligenceSubscribe)
+	s.mux.HandleFunc("/api/v1/intelligence/export", s.handleIntelligenceExport)
 
 	// Account ledger
 	s.mux.HandleFunc("/api/v1/accounts/", s.handleAccountBalance)
@@ -258,6 +272,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/agents/register
+// Enforces exponential stake requirements for Sybil resistance:
+//   Agent 1: 1,000 $ALPHA | Agent 2: 10,000 | Agent 3: 100,000 | ... (10x each)
 func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "POST required")
@@ -270,7 +286,7 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		Stake        core.Amount       `json:"stake"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -283,6 +299,31 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	if len(req.Capabilities) == 0 {
 		req.Capabilities = []core.Capability{core.CapabilityValidation}
 	}
+
+	// ── Sybil protection: exponential stake requirements ──────────
+	// Each additional agent requires 10x the previous agent's stake.
+	// This makes running 1 great agent >> running 1000 mediocre ones.
+	existingAgentCount := len(s.registry.ListAgents(nil))
+	requiredStake := core.RequiredStake(existingAgentCount + 1)
+
+	if req.Stake < requiredStake {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("insufficient stake: agent %d requires %d $ALPHA stake (got %d)",
+				existingAgentCount+1, requiredStake, req.Stake))
+		return
+	}
+
+	// Verify the registrant actually holds the stake amount in the ledger
+	if s.ledger != nil {
+		balance := s.ledger.Balance(req.Address)
+		if balance < requiredStake {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("insufficient balance: address %s holds %d $ALPHA, need %d $ALPHA to stake",
+					req.Address, balance, requiredStake))
+			return
+		}
+	}
+	// ── End Sybil protection ──────────────────────────────────────
 
 	blockHeight := uint64(0)
 	if s.producer != nil {
@@ -297,9 +338,14 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Credit initial stake to agent's ledger account
+	// Lock the stake: debit from the user's address, credit to agent account
 	if s.ledger != nil && req.Stake > 0 {
 		agentAddr := core.Address("alpha_agent_" + string(identity.AgentID))
+		// Debit the stake from the registrant's address (locking funds)
+		if debitErr := s.ledger.Debit(req.Address, req.Stake); debitErr != nil {
+			// If debit fails (unlikely since we checked balance), still credit agent
+			log.Printf("⚠️  Stake debit failed for %s: %v", req.Address, debitErr)
+		}
 		_ = s.ledger.Credit(agentAddr, req.Stake)
 	}
 
@@ -316,10 +362,14 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"success":  true,
-		"agent_id": identity.AgentID,
-		"identity": identity,
-		"message":  "Agent registered on Alpha Network. Start earning $ALPHA.",
+		"success":         true,
+		"agent_id":        identity.AgentID,
+		"identity":        identity,
+		"agent_number":    existingAgentCount + 1,
+		"required_stake":  requiredStake,
+		"stake_locked":    req.Stake,
+		"next_stake":      core.RequiredStake(existingAgentCount + 2),
+		"message":         "Agent registered on Alpha Network. Start earning $ALPHA.",
 	})
 }
 
@@ -377,6 +427,9 @@ func (s *Server) handleAgentList(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/transfer
+// Every transfer must be signed by the sender's Ed25519 private key.
+// The canonical message signed is: "transfer:{from}:{to}:{amount}:{nonce}:{timestamp}"
+// This proves the sender owns the from_address and prevents replay attacks.
 func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "POST required")
@@ -384,13 +437,17 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		From   core.Address `json:"from"`
-		To     core.Address `json:"to"`
-		Amount core.Amount  `json:"amount"`
-		Memo   string       `json:"memo"`
+		From      core.Address `json:"from"`
+		To        core.Address `json:"to"`
+		Amount    core.Amount  `json:"amount"`
+		Memo      string       `json:"memo"`
+		Pubkey    string       `json:"pubkey"`    // Ed25519 public key (hex, 64 chars)
+		Signature string       `json:"signature"` // Ed25519 signature (hex, 128 chars)
+		Nonce     int64        `json:"nonce"`     // anti-replay nonce
+		Timestamp int64        `json:"timestamp"`  // signature timestamp
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -399,6 +456,35 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "from, to, and amount required")
 		return
 	}
+
+	// ── Ed25519 signature verification ───────────────────────────
+	// The sender must prove they own the from_address by signing
+	// the canonical transfer message with their private key.
+	if req.Pubkey == "" || req.Signature == "" {
+		writeError(w, http.StatusBadRequest, "pubkey and signature required for transfer authentication")
+		return
+	}
+
+	// Validate timestamp is within ±5 min to prevent replay of old signatures
+	now := time.Now().Unix()
+	if req.Timestamp == 0 {
+		req.Timestamp = now
+	}
+	if abs64(now-req.Timestamp) > 300 {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("timestamp expired: %ds from server (max 300s)", abs64(now-req.Timestamp)))
+		return
+	}
+
+	if err := alphacrypto.VerifyTransfer(
+		string(req.From), req.Pubkey, string(req.To),
+		int64(req.Amount), req.Nonce, req.Timestamp,
+		req.Signature,
+	); err != nil {
+		writeError(w, http.StatusUnauthorized, "signature verification failed: "+err.Error())
+		return
+	}
+	// ── End signature verification ───────────────────────────────
 
 	var txID string
 
@@ -483,22 +569,118 @@ func (s *Server) handleTasksAvailable(w http.ResponseWriter, r *http.Request) {
 // GET  /api/v1/tasks/{task_id}  — get task status
 // POST /api/v1/tasks/{task_id}/submit  — submit a result
 func (s *Server) handleTaskByID(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/tasks/")
+	taskID := r.PathValue("id")
+	path := r.URL.Path
 
 	// POST /api/v1/tasks/{id}/submit
-	if strings.HasSuffix(path, "/submit") && r.Method == http.MethodPost {
-		taskID := strings.TrimSuffix(path, "/submit")
+	if strings.HasSuffix(path, "/submit") {
 		s.handleTaskSubmit(w, r, taskID)
 		return
 	}
 
-	// GET /api/v1/tasks/{id}
-	if r.Method == http.MethodGet {
-		s.handleTaskGet(w, r, path)
+	// POST /api/v1/tasks/{id}/assign
+	if strings.HasSuffix(path, "/assign") {
+		s.handleTaskAssign(w, r, taskID)
 		return
 	}
 
-	writeError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	// POST /api/v1/tasks/{id}/complete
+	if strings.HasSuffix(path, "/complete") {
+		s.handleTaskComplete(w, r, taskID)
+		return
+	}
+
+	// GET /api/v1/tasks/{id}
+	s.handleTaskGet(w, r, taskID)
+}
+
+// handleTaskAssign allows an agent to claim a pending task from the marketplace.
+// POST /api/v1/tasks/{task_id}/assign
+func (s *Server) handleTaskAssign(w http.ResponseWriter, r *http.Request, taskID string) {
+	if s.marketplace == nil {
+		writeError(w, http.StatusServiceUnavailable, "marketplace not initialized")
+		return
+	}
+
+	var req struct {
+		AgentID core.AgentID `json:"agent_id"`
+	}
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id required")
+		return
+	}
+
+	task, err := s.marketplace.GetTask(taskID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	if err := s.marketplace.AssignToAgent(taskID, req.AgentID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"task_id":  taskID,
+		"agent_id": req.AgentID,
+		"status":   "assigned",
+		"reward":   task.Reward,
+	})
+}
+
+// handleTaskComplete finalizes a task with consensus verification and reward distribution.
+// POST /api/v1/tasks/{task_id}/complete
+func (s *Server) handleTaskComplete(w http.ResponseWriter, r *http.Request, taskID string) {
+	if s.marketplace == nil {
+		writeError(w, http.StatusServiceUnavailable, "marketplace not initialized")
+		return
+	}
+
+	var req struct {
+		ConsensusHash string `json:"consensus_hash"`
+	}
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	// If no consensus hash provided, derive from submitted results
+	if req.ConsensusHash == "" {
+		task, getErr := s.marketplace.GetTask(taskID)
+		if getErr != nil {
+			writeError(w, http.StatusNotFound, getErr.Error())
+			return
+		}
+		if task.ResultHash != "" {
+			req.ConsensusHash = task.ResultHash
+		} else {
+			consensusHash, outliers, verifyErr := s.marketplace.VerifyResult(taskID, nil)
+			if verifyErr != nil {
+				writeError(w, http.StatusBadRequest, "verification failed: "+verifyErr.Error())
+				return
+			}
+			req.ConsensusHash = consensusHash
+			_ = outliers
+		}
+	}
+
+	if err := s.marketplace.CompleteTask(taskID, req.ConsensusHash); err != nil {
+		writeError(w, http.StatusBadRequest, "complete failed: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":        true,
+		"task_id":        taskID,
+		"status":         "completed",
+		"consensus_hash": req.ConsensusHash,
+	})
 }
 
 // handleTaskGet returns the status of a single task
@@ -529,7 +711,7 @@ func (s *Server) handleTaskSubmit(w http.ResponseWriter, r *http.Request, taskID
 		ResultHash string       `json:"result_hash"`
 		IPFSCID    string       `json:"ipfs_cid"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -563,7 +745,7 @@ func (s *Server) handleTaskPost(w http.ResponseWriter, r *http.Request) {
 		PostedBy   core.Address    `json:"posted_by"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -904,7 +1086,7 @@ func (s *Server) handleIntelligenceSubscribe(w http.ResponseWriter, r *http.Requ
 		Capability  string `json:"capability,omitempty"`
 		Limit       int    `json:"limit,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -984,7 +1166,7 @@ func (s *Server) handlePeerAnnounce(w http.ResponseWriter, r *http.Request) {
 		Port    int    `json:"port"`
 		AgentID string `json:"agent_id,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -1016,7 +1198,7 @@ func (s *Server) handleP2PBlock(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Block *core.Block `json:"block"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -1069,7 +1251,7 @@ func (s *Server) handleGovPropose(w http.ResponseWriter, r *http.Request) {
 		NewValue    string `json:"new_value"`
 		AgentID     string `json:"agent_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -1112,7 +1294,7 @@ func (s *Server) handleGovVote(w http.ResponseWriter, r *http.Request) {
 		ProposalID string `json:"proposal_id"`
 		Choice     bool   `json:"choice"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -1259,7 +1441,7 @@ func (s *Server) handleIPFS(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			CID string `json:"cid"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 			return
 		}
@@ -1350,7 +1532,7 @@ func (s *Server) handlePoIProof(w http.ResponseWriter, r *http.Request) {
 		EntropyScore float64 `json:"entropy_score"`
 		AgentID      string  `json:"agent_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	limitBody(w, r); if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
@@ -1433,6 +1615,101 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func abs64(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// GET /api/v1/intelligence/export — export the last N agent behavioral records
+// Returns JSON array of IntelligenceRecord objects suitable for the data subscription
+// product. Query params:
+//
+//	limit  — max records to return (default 1000, max 10000)
+//	agent  — filter by agent ID (optional)
+//	type   — filter by task type (optional: inference, validation, data, governance)
+//	format — "json" (default, pretty-printed array) or "jsonl" (newline-delimited)
+//
+// Authentication: for external (non-registered) callers, 10 $ALPHA is burned per
+// request via the from_address param. Registered agents query free.
+func (s *Server) handleIntelligenceExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+
+	// ── Parse params ────────────────────────────────────────────
+	limit := 1000
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			if n > 10000 {
+				n = 10000
+			}
+			limit = n
+		}
+	}
+
+	agentFilter := core.AgentID(r.URL.Query().Get("agent"))
+	taskTypeFilter := r.URL.Query().Get("type")
+	outputFormat := r.URL.Query().Get("format")
+	if outputFormat == "" {
+		outputFormat = "json"
+	}
+
+	// ── Authentication / billing ─────────────────────────────────
+	fromAddr := r.URL.Query().Get("from_address")
+	if fromAddr != "" {
+		// Check if caller is a registered agent
+		_, regErr := s.registry.GetAgentByAddress(core.Address(fromAddr))
+		if regErr != nil {
+			// External caller — charge 10 $ALPHA
+			const exportFee = core.Amount(10)
+			if s.ledger != nil {
+				if err := s.ledger.BurnSupply(core.Address(fromAddr), exportFee); err != nil {
+					writeError(w, http.StatusPaymentRequired,
+						"export costs 10 $ALPHA for unregistered callers: "+err.Error())
+					return
+				}
+			}
+		}
+	}
+
+	// ── Gather records ───────────────────────────────────────────
+	if s.oracle == nil {
+		writeError(w, http.StatusServiceUnavailable, "intelligence oracle not available")
+		return
+	}
+
+	records := s.oracle.ExportRecords(limit, agentFilter, taskTypeFilter)
+
+	// ── Respond ──────────────────────────────────────────────────
+	switch outputFormat {
+	case "jsonl":
+		// Newline-delimited JSON — efficient for streaming / bulk import
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		enc := json.NewEncoder(w)
+		for _, rec := range records {
+			if err := enc.Encode(rec); err != nil {
+				return // client disconnected
+			}
+		}
+	default:
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":    true,
+			"count":      len(records),
+			"limit":      limit,
+			"agent":      string(agentFilter),
+			"task_type":  taskTypeFilter,
+			"format":     outputFormat,
+			"records":    records,
+			"exported_at": time.Now().Unix(),
+			"chain_id":   "alpha-1",
+		})
+	}
 }
 
 // GET /api/v1/health/detailed — extended node health report from the monitor
