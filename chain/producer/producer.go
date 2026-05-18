@@ -31,6 +31,8 @@ const (
 	blockInterval    = 500 * time.Millisecond
 	mempoolCap       = 10_000
 	rewardAddr       = core.Address("alpha1_protocol_treasury")
+	operatorAddr     = core.Address("alpha19m8uguks3xnvynzt58vp4ugj6acvzncax23799") // Zak — 10% operator share
+	operatorShare    = core.Amount(10) // 10% to node operator
 	statsLogInterval = 10 * time.Second
 )
 
@@ -472,8 +474,10 @@ func (p *BlockProducer) produceBlock() {
 			}
 			log.Printf("🔄 Bootstrap reward: %d $ALPHA split across %d validators", blockReward, len(pendingProofs))
 		} else {
-			// Still distribute a base block reward to the treasury
-			_ = p.ledger.Credit(rewardAddr, blockReward)
+			// Distribute block reward: 10% operator, 90% treasury
+			opShare := blockReward * operatorShare / 100
+			_ = p.ledger.Credit(operatorAddr, opShare)
+			_ = p.ledger.Credit(rewardAddr, blockReward-opShare)
 		}
 	}
 

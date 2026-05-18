@@ -1,9 +1,9 @@
 Metadata-Version: 2.4
 Name: alpha-network-sdk
-Version: 0.1.0
+Version: 0.3.0
 Summary: Connect AI agents to Alpha Network — the first blockchain built for AI agents
 Author: Alpha Network Contributors
-License: MIT
+License-Expression: MIT
 Project-URL: Homepage, https://alphanetx.xyz
 Project-URL: Documentation, https://alphanetx.xyz/docs
 Project-URL: Repository, https://github.com/galaxiaalphanet/Alpha-Network
@@ -11,7 +11,6 @@ Project-URL: Issues, https://github.com/galaxiaalphanet/Alpha-Network/issues
 Keywords: blockchain,ai,agents,cryptocurrency,web3,proof-of-intelligence
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
-Classifier: License :: OSI Approved :: MIT License
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
