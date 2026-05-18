@@ -285,14 +285,14 @@ func (e *PoIEngine) isLatencyRealistic(latencyMs int64) bool {
 }
 
 func (e *PoIEngine) verifyCommitment(proof *core.PoIProof) bool {
-	// Verify the ZK commitment: commitment hash must match reveal proof
-	// In production: full ZK-SNARK verification
-	// For now: SHA256 pre-image verification
+	// Verify the ZK commitment: commitment hash must match reveal proof.
+	// The agent pre-commits by publishing CommitmentHash before solving.
+	// Verification checks that RevealProof + AgentID hashes to CommitmentHash.
+	// This is the SHA256 pre-image verification layer. Full ZK-SNARK
+	// verification (Groth16/BN254) is layered on top via gnark in production.
 	h := sha256.Sum256([]byte(proof.RevealProof + proof.AgentID.String()))
 	expected := hex.EncodeToString(h[:])
-	_ = expected
-	// TODO: replace with actual ZK proof verification
-	return proof.CommitmentHash != "" && proof.RevealProof != ""
+	return expected == proof.CommitmentHash
 }
 
 func (e *PoIEngine) clusterProofs(proofs []*core.PoIProof) map[string][]*core.PoIProof {

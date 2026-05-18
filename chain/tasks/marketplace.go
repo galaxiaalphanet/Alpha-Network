@@ -234,6 +234,33 @@ func (m *Marketplace) AssignTask(agentID core.AgentID, capability core.Capabilit
 // ErrNoMatchingTask is returned by AssignTask when no pending task matches.
 var ErrNoMatchingTask = errors.New("no matching task available")
 
+// AssignToAgent explicitly assigns a pending task to a specific agent.
+// Unlike AssignTask which pops from the priority queue, this directly targets
+// a specific task ID. Useful for API-driven task claiming by agents.
+func (m *Marketplace) AssignToAgent(taskID string, agentID core.AgentID) error {
+	if taskID == "" {
+		return errors.New("taskID cannot be empty")
+	}
+	if agentID == "" {
+		return errors.New("agentID cannot be empty")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, ok := m.tasks[taskID]
+	if !ok {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+	if task.Status != core.TaskPending {
+		return fmt.Errorf("task %s is not pending (status: %s)", taskID, task.Status)
+	}
+
+	task.Status = core.TaskAssigned
+	task.AssignedTo = append(task.AssignedTo, agentID)
+	return nil
+}
+
 // SubmitResult records an agent's result for a task. The resultHash should be
 // a content hash of the result; ipfsCID is the IPFS CID where the full result is pinned.
 func (m *Marketplace) SubmitResult(agentID core.AgentID, taskID string, resultHash string, ipfsCID string) error {

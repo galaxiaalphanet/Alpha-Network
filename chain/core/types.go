@@ -13,9 +13,24 @@ const (
 	TotalSupply     = 1_000_000_000 // 1 billion $ALPHA
 	BlockTimeMs     = 500           // 500ms target block time
 	MinStake        = 1_000         // Minimum stake to become a validator agent
+	StakeMultiplier = 10            // Exponential Sybil deterrent: each agent = 10x previous
 	SlashPenalty    = 0.10          // 10% slash for bad behavior
 	RewardPerBlock  = 6337          // ~100M in year 1, decays over time
 )
+
+// RequiredStake returns the minimum stake for the Nth agent registering.
+// Exponential Sybil deterrent: Agent 1 = 1,000, Agent 2 = 10,000, Agent 3 = 100,000…
+func RequiredStake(agentNumber int) Amount {
+	if agentNumber <= 0 {
+		return MinStake
+	}
+	// agentNumber 1 → 1,000, 2 → 10,000, 3 → 100,000 (10x each step)
+	stake := MinStake
+	for i := 1; i < agentNumber; i++ {
+		stake *= StakeMultiplier
+	}
+	return Amount(stake)
+}
 
 // AgentID is a unique on-chain identifier for an AI agent
 type AgentID string

@@ -365,6 +365,45 @@ func (o *IntelligenceOracle) QueryAgentProfile(agentID core.AgentID) (*AgentProf
 	return profile, nil
 }
 
+// ExportRecords returns the last N agent behavioral records across all datasets,
+// optionally filtered by agent ID and/or task type. Results are sorted by block
+// height descending (most recent first). This is the canonical data feed for the
+// Intelligence Data Subscription product.
+func (o *IntelligenceOracle) ExportRecords(limit int, agentFilter core.AgentID, taskTypeFilter string) []*IntelligenceRecord {
+	o.marketplace.mu.RLock()
+	defer o.marketplace.mu.RUnlock()
+
+	// Collect all matching records
+	var all []*IntelligenceRecord
+	for _, ds := range o.marketplace.datasets {
+		if agentFilter != "" && ds.AgentID != agentFilter {
+			continue
+		}
+		for _, rec := range ds.Records {
+			if taskTypeFilter != "" && rec.TaskType != taskTypeFilter {
+				continue
+			}
+			cp := *rec // shallow copy is fine; strings are immutable in Go
+			all = append(all, &cp)
+		}
+	}
+
+	// Sort by block height descending (most recent first)
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].BlockHeight != all[j].BlockHeight {
+			return all[i].BlockHeight > all[j].BlockHeight
+		}
+		return all[i].Timestamp > all[j].Timestamp
+	})
+
+	// Apply limit
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+
+	return all
+}
+
 // TopByEntropy returns agents sorted by average output entropy (most "AI-like" first)
 func (o *IntelligenceOracle) TopByEntropy(limit int) []core.AgentID {
 	o.marketplace.mu.RLock()
