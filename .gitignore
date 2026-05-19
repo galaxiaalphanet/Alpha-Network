@@ -36,6 +36,7 @@ data/
 *.mem
 explorer/alpha-explorer
 explorer/explorer
+explorer/explorer
 alphanode
 genesis.json
 solana/node_modules/
