@@ -44,6 +44,10 @@ type P2PNode struct {
 	ownPort    int
 	seedPeers  []string // initial peers to bootstrap from
 
+	// Deduplication cache — prevents gossip loops and re-processing of known blocks
+	seenBlocks map[string]time.Time // block hash → when first seen
+	seenMu     stdsync.RWMutex
+
 	mu      stdsync.RWMutex
 	running bool
 	stopCh  chan struct{}
@@ -87,6 +91,7 @@ func NewP2PNode(cfg Config) *P2PNode {
 		ownAddr:      cfg.MyAddress,
 		ownPort:      cfg.MyPort,
 		seedPeers:    cfg.SeedPeers,
+		seenBlocks:   make(map[string]time.Time),
 		stopCh:       make(chan struct{}),
 	}
 }
@@ -169,10 +174,23 @@ func (n *P2PNode) BroadcastBlock(block *core.Block) {
 // HandleIncomingBlock is the HTTP handler for POST /api/v1/p2p/block.
 // It receives a block from a peer, validates its hash, stores it, and
 // re-gossips it to other peers (except the sender).
+// Deduplication: blocks already seen (by hash) are silently dropped to prevent
+// gossip amplification loops.
 func (n *P2PNode) HandleIncomingBlock(block *core.Block, senderAddr string) error {
 	if block == nil {
 		return fmt.Errorf("nil block")
 	}
+
+	// ── Deduplication check ────────────────────────────────────
+	// Gossip loops are a real threat in P2P networks: the same block
+	// arrives from multiple peers within milliseconds. We track every
+	// block hash we've seen in the last 10 minutes and silently drop
+	// duplicates to prevent CPU/bandwidth waste.
+	if n.IsBlockSeen(block.Hash) {
+		return nil // not an error — normal P2P gossip redundancy
+	}
+	n.MarkBlockSeen(block.Hash)
+	// ── End dedup ───────────────────────────────────────────────
 
 	// Validate the block hash
 	stored := block.Hash
@@ -229,8 +247,10 @@ func (n *P2PNode) gossipBlock(block *core.Block, excludeAddr string) {
 func (n *P2PNode) loop() {
 	announceTicker := time.NewTicker(30 * time.Second)
 	syncTicker := time.NewTicker(60 * time.Second)
+	gcTicker := time.NewTicker(5 * time.Minute) // evict stale seen-block entries
 	defer announceTicker.Stop()
 	defer syncTicker.Stop()
+	defer gcTicker.Stop()
 
 	for {
 		select {
@@ -240,6 +260,8 @@ func (n *P2PNode) loop() {
 			n.announce()
 		case <-syncTicker.C:
 			n.syncFromBestPeer()
+		case <-gcTicker.C:
+			n.gcSeenBlocks()
 		}
 	}
 }
@@ -271,6 +293,37 @@ func (n *P2PNode) syncFromBestPeer() {
 
 	if err := n.syncer.SyncFromPeer(bestPeer.URL(), n.store, n.prod); err != nil {
 		log.Printf("[p2p] sync from %s failed: %v", bestPeer.URL(), err)
+	}
+}
+
+// IsBlockSeen returns true if a block with this hash has been seen recently.
+// Used to prevent gossip amplification loops.
+func (n *P2PNode) IsBlockSeen(hash string) bool {
+	n.seenMu.RLock()
+	defer n.seenMu.RUnlock()
+	_, ok := n.seenBlocks[hash]
+	return ok
+}
+
+// MarkBlockSeen records a block hash as seen.
+func (n *P2PNode) MarkBlockSeen(hash string) {
+	n.seenMu.Lock()
+	defer n.seenMu.Unlock()
+	n.seenBlocks[hash] = time.Now()
+}
+
+// gcSeenBlocks evicts entries older than the TTL to bound memory.
+// Block hashes are 64 hex chars (32 bytes), so ~100k entries = ~3 MB.
+const seenBlockTTL = 10 * time.Minute
+
+func (n *P2PNode) gcSeenBlocks() {
+	n.seenMu.Lock()
+	defer n.seenMu.Unlock()
+	cutoff := time.Now().Add(-seenBlockTTL)
+	for hash, ts := range n.seenBlocks {
+		if ts.Before(cutoff) {
+			delete(n.seenBlocks, hash)
+		}
 	}
 }
 

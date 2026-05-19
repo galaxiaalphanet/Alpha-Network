@@ -25,12 +25,37 @@ Build the native economic layer for AI agents — the money, identity, reputatio
 
 Alpha Network is **not** a meme token, **not** a fork, **not** someone else's chain with a new name. It is a **custom Layer 1 blockchain built from scratch in Go**, for AI agents as first-class citizens.
 
-### Current Phase: SCALE
+### Current Phase: MAINNET SPRINT
 
 Active priorities (in order):
-1. **Publish Python SDK to PyPI** — ✅ Live at pypi.org/project/alpha-network-sdk/0.3.0/
-2. **Post on Reddit r/LocalLLaMA** — announce to the open-source AI community
-3. **Recruit first 10 external agents** — onboard real AI agents to the network
+1. **Mainnet Pre-Flight (1.1–1.8)** — Security hardening. 1.1–1.6 ✅ Done, 1.7–1.8 pending external audit.
+2. **TypeScript SDK npm publish** — ✅ Dry-run passes, needs `npm login`.
+3. **Testnet faucet** — ✅ Built at `cmd/faucet/`, ready to deploy.
+4. **P2P stress test monitoring** — ✅ Fixed: log-based health checks instead of HTTP polling.
+5. **7-day multi-node testnet (4.1)** — Pending.
+
+### Mainnet Checklist Progress
+
+See `docs/MAINNET_CHECKLIST.md` for full details.
+
+**Pre-Flight (1.1–1.8):**
+| Item | Status |
+|---|---|
+| 1.1 Fix `RunConsensus` proof depletion | ✅ Done — evict stale proofs on quorum/no-majority |
+| 1.2 Fix burn semantics (BurnSupply vs BurnFromProtocol) | ✅ Done — both now decrement totalSupply |
+| 1.3 P2P block deduplication cache | ✅ Done — seenBlocks map with 10min TTL |
+| 1.4 Per-address nonce tracking | ✅ Done — nonces map + InternalTransfer for system txs |
+| 1.5 Restrict CORS for mainnet | ✅ Done — SetCORSOrigins() with allowlist |
+| 1.6 Sanitize error messages | ✅ Done — removed address/balance leaks from error responses |
+| 1.7 External security audit | 🔲 Pending — third-party |
+| 1.8 Penetration test | 🔲 Pending — fuzz all endpoints |
+
+**SDK & Developer Tooling (5.x):**
+| Item | Status |
+|---|---|
+| 5.1 Python SDK v1.0 on PyPI | ✅ Published as alpha-network-sdk |
+| 5.2 TypeScript SDK v1.0 on npm | ⚠️ Built, dry-run passes. Needs npm login to publish. |
+| 5.7 Testnet faucet | ✅ Built — `cmd/faucet/main.go`, rate-limited, anti-bot |
 
 ## Roadmap
 
@@ -49,7 +74,7 @@ Active priorities (in order):
 | Block explorer (5-page UI) | ✅ Complete |
 | Explorer UI redesign (Solscan-quality) | ✅ Complete |
 | Homepage with 3D globe animation | ✅ Complete |
-| CORS headers on API | ✅ Complete |
+| CORS headers on API | ✅ Complete (mainnet-restricted) |
 | Caddy caching fix | ✅ Complete |
 | Caddy explorer route fix (handle_path) | ✅ Complete |
 | TLS proxy (Go) | ✅ Complete |
@@ -57,8 +82,13 @@ Active priorities (in order):
 | Deploy scripts (deploy-all.sh) | ✅ Complete |
 | GitHub SSH key for direct deployment | ✅ Complete |
 | P2P networking | ✅ Two-node gossip working |
+| P2P block dedup cache | ✅ Complete |
+| Ledger nonce tracking | ✅ Complete |
 | $ALPHA SPL token on Solana | ✅ Deployed (devnet) — mint 42vtTuV6YUys4iGBgcVzcG19sKNf2g5ji3nc8qkvCHiT |
 | Ledger persistence (BadgerDB) | ✅ Balance snapshots survive restarts |
+| Testnet faucet | ✅ Complete (cmd/faucet) |
+| Mainnet Pre-Flight (1.1–1.6) | ✅ Complete |
+| Mainnet Pre-Flight (1.7–1.8) | 🔲 External audit pending |
 
 ## Working Rules
 

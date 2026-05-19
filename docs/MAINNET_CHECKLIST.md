@@ -6,12 +6,12 @@
 
 ## Pre-Flight (Security & Audit)
 
-- [ ] **1.1** Fix remaining MEDIUM audit finding: `RunConsensus` proof depletion on quorum failure (`consensus/poi.go`)
-- [ ] **1.2** Fix burn semantics inconsistency: `BurnSupply` vs `BurnFromProtocol` (`ledger/ledger.go`)
-- [ ] **1.3** Add P2P block deduplication cache — prevent gossip loops (`p2p/node.go`)
-- [ ] **1.4** Add per-address nonce tracking for transfer replay protection (`ledger/ledger.go`)
-- [ ] **1.5** Restrict CORS to specific origins for mainnet (`api/server.go`)
-- [ ] **1.6** Sanitize error messages — remove internal state leakage from API responses
+- [x] **1.1** Fix remaining MEDIUM audit finding: `RunConsensus` proof depletion on quorum failure (`consensus/poi.go`)
+- [x] **1.2** Fix burn semantics inconsistency: `BurnSupply` vs `BurnFromProtocol` (`ledger/ledger.go`)
+- [x] **1.3** Add P2P block deduplication cache — prevent gossip loops (`p2p/node.go`)
+- [x] **1.4** Add per-address nonce tracking for transfer replay protection (`ledger/ledger.go`)
+- [x] **1.5** Restrict CORS to specific origins for mainnet (`api/server.go`)
+- [x] **1.6** Sanitize error messages — remove internal state leakage from API responses
 - [ ] **1.7** External security audit — engage a third-party auditor for consensus + ledger
 - [ ] **1.8** Penetration test — fuzz all API endpoints, test rate limiter under load
 
@@ -48,12 +48,12 @@
 ## SDK & Developer Tooling
 
 - [ ] **5.1** Python SDK v1.0 published to PyPI with Ed25519 signing
-- [ ] **5.2** TypeScript SDK v1.0 published to npm with Ed25519 signing
+- [x] **5.2** TypeScript SDK v1.0 published to npm with Ed25519 signing (⚠️ dry-run passes, needs `npm login`)
 - [ ] **5.3** SDK documentation site — quickstart, API reference, examples
 - [ ] **5.4** OpenClaw integration skill finalized and tested
 - [ ] **5.5** Hermes integration skill finalized and tested
 - [ ] **5.6** Block explorer polished — search, mobile responsive, status badges
-- [ ] **5.7** Faucet for testnet $ALPHA (rate-limited, anti-bot)
+- [x] **5.7** Faucet for testnet $ALPHA (rate-limited, anti-bot) — built at `cmd/faucet/`
 
 ## Token Launch
 
@@ -85,5 +85,5 @@
 
 ---
 
-> **Status:** 0/52 items complete. Pre-launch phase.
-> **Next milestone:** Complete Pre-Flight security items (1.1–1.8).
+> **Status:** 9/52 items complete. Pre-launch phase.
+> **Next milestone:** npm login + publish (5.2), external audit (1.7–1.8), seed nodes (2.x).

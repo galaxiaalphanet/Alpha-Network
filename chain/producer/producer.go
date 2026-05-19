@@ -502,7 +502,7 @@ func (p *BlockProducer) produceBlock() {
 	// Apply ledger transfers for submitted transactions
 	for _, tx := range txs {
 		if tx.Type == core.TxTransfer && tx.Amount > 0 {
-			_, _ = p.ledger.Transfer(tx.From, tx.To, tx.Amount, tx.Memo)
+			_, _ = p.ledger.InternalTransfer(tx.From, tx.To, tx.Amount, tx.Memo)
 		}
 		atomic.AddUint64(&p.txCount, 1)
 	}
@@ -528,6 +528,10 @@ func (p *BlockProducer) produceBlock() {
 	p.mu.Unlock()
 
 	atomic.StoreUint64(&p.height, nextHeight)
+
+	// Log block production — used by monitoring scripts for log-based health checks
+	log.Printf("📦 Block %d produced | prev=%s | txs=%d | validator=%s",
+		nextHeight, block.PrevHash[:12], len(block.Transactions), validatorID)
 
 	// Persist block to BadgerDB (non-blocking; log but don't crash on error)
 	if s != nil {

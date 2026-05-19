@@ -46,6 +46,7 @@ type Server struct {
 	p2pNode     *p2p.P2PNode
 	ipfsClient  *ipfs.Client
 	govModule   *governance.Module
+	allowedCORS []string // allowed CORS origins (empty = allow all, for dev/testnet)
 }
 
 // NewServer creates an API server
@@ -165,10 +166,46 @@ func limitBody(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 }
 
+// SetCORSOrigins configures which origins are allowed to call the API via CORS.
+// Pass nil or empty to allow all origins (dev/testnet default).
+// For mainnet you SHOULD set specific origins, e.g.:
+//
+//	server.SetCORSOrigins("https://explorer.alphanetx.xyz", "https://alphanetx.xyz")
+func (s *Server) SetCORSOrigins(origins ...string) {
+	s.allowedCORS = origins
+}
+
 // corsMiddleware adds CORS headers to every response so browsers can call the API.
-func corsMiddleware(next http.Handler) http.Handler {
+// In mainnet mode (allowedCORS set) it restricts to the configured origins.
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		allowOrigin := "*"
+
+		if len(s.allowedCORS) > 0 {
+			// Mainnet mode: restrict to configured origins
+			allowOrigin = ""
+			for _, allowed := range s.allowedCORS {
+				if origin == allowed || allowed == "*" {
+					allowOrigin = origin
+					break
+				}
+			}
+			if allowOrigin == "" {
+				// Origin not allowed — still serve the request (CORS is not auth),
+				// but don't set ACAO so the browser will block cross-origin reads.
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
@@ -182,9 +219,12 @@ func corsMiddleware(next http.Handler) http.Handler {
 // Start launches the API server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
+	if len(s.allowedCORS) > 0 {
+		log.Printf("🔒 CORS restricted to origins: %v", s.allowedCORS)
+	}
 	log.Printf("Alpha Network API listening on %s", addr)
 	// Wrap mux with CORS, then rate-limiting
-	handler := corsMiddleware(s.rl.Middleware(s.mux))
+	handler := s.corsMiddleware(s.rl.Middleware(s.mux))
 	return http.ListenAndServe(addr, handler)
 }
 
@@ -308,8 +348,8 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 
 	if req.Stake < requiredStake {
 		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("insufficient stake: agent %d requires %d $ALPHA stake (got %d)",
-				existingAgentCount+1, requiredStake, req.Stake))
+			fmt.Sprintf("insufficient stake: agent %d requires %d $ALPHA",
+				existingAgentCount+1, requiredStake))
 		return
 	}
 
@@ -318,8 +358,8 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		balance := s.ledger.Balance(req.Address)
 		if balance < requiredStake {
 			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("insufficient balance: address %s holds %d $ALPHA, need %d $ALPHA to stake",
-					req.Address, balance, requiredStake))
+				fmt.Sprintf("insufficient balance: need %d $ALPHA to stake",
+					requiredStake))
 			return
 		}
 	}
@@ -584,9 +624,9 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 	var txID string
 
 	if s.ledger != nil {
-		// Real ledger transfer
+		// Real ledger transfer with per-address nonce for replay protection
 		var err error
-		txID, err = s.ledger.Transfer(req.From, req.To, req.Amount, req.Memo)
+		txID, err = s.ledger.Transfer(req.From, req.To, req.Amount, req.Memo, req.Nonce)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "transfer failed: "+err.Error())
 			return
@@ -1112,7 +1152,7 @@ func (s *Server) handleIntelligenceQuery(w http.ResponseWriter, r *http.Request)
 				agentAddr := core.Address("alpha_agent_" + string(agentID))
 				if err := s.ledger.BurnSupply(agentAddr, oracleExternalBurn); err != nil {
 					writeError(w, http.StatusPaymentRequired,
-						"oracle query costs 10 $ALPHA for unregistered agents: "+err.Error())
+						"oracle query requires 10 $ALPHA fee")
 					return
 				}
 			}
@@ -1197,7 +1237,7 @@ func (s *Server) handleIntelligenceSubscribe(w http.ResponseWriter, r *http.Requ
 			if s.ledger != nil {
 				if err := s.ledger.BurnSupply(core.Address(req.FromAddress), queryFee); err != nil {
 					writeError(w, http.StatusPaymentRequired,
-						"payment failed — 10 $ALPHA required: "+err.Error())
+						"payment required: 10 $ALPHA per query")
 					return
 				}
 			}
@@ -1765,7 +1805,7 @@ func (s *Server) handleIntelligenceExport(w http.ResponseWriter, r *http.Request
 			if s.ledger != nil {
 				if err := s.ledger.BurnSupply(core.Address(fromAddr), exportFee); err != nil {
 					writeError(w, http.StatusPaymentRequired,
-						"export costs 10 $ALPHA for unregistered callers: "+err.Error())
+						"export requires 10 $ALPHA fee")
 					return
 				}
 			}
