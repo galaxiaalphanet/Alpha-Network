@@ -44,11 +44,20 @@ sleep 1
 nohup python3 -m http.server 3003 -d /var/www/alphanetx &>/dev/null &
 echo "   Static server started on :3003"
 
-# Caddy reload
-if command -v caddy &>/dev/null && caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
-    echo "   Caddy reloaded"
+# Caddy — start fresh if not running, reload if running
+if command -v caddy &>/dev/null; then
+    if caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
+        echo "   Caddy reloaded"
+    else
+        # Not running — start it
+        kill $(lsof -ti:80 2>/dev/null) 2>/dev/null || true
+        sleep 1
+        nohup caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &>/var/log/caddy.log &
+        sleep 2
+        echo "   Caddy started on :80"
+    fi
 else
-    echo "   ⚠️  Caddy reload skipped"
+    echo "   ⚠️  Caddy not found"
 fi
 
 sleep 2
