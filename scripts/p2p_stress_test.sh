@@ -12,6 +12,18 @@ set -e
 ALPHA_BIN="/opt/Alpha-Network/alphanode"
 DATA_ROOT="/tmp/alpha-p2p-test"
 LOG_DIR="$DATA_ROOT/logs"
+LOCKFILE="$DATA_ROOT/.lock"
+
+# Prevent duplicate runs
+if [ -f "$LOCKFILE" ]; then
+    OLD_PID=$(cat "$LOCKFILE" 2>/dev/null)
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "❌ Another stress test is already running (PID $OLD_PID)"
+        exit 1
+    fi
+fi
+echo $$ > "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT
 DURATION_HOURS=24
 START_TIME=$(date +%s)
 END_TIME=$((START_TIME + DURATION_HOURS * 3600))
