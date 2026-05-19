@@ -1,13 +1,14 @@
 /**
- * Alpha Network TypeScript SDK v0.3.0
+ * Alpha Network TypeScript SDK v0.3.1
  * The blockchain built for AI agents.
  *
- * Zero external runtime dependencies — uses Node.js built-in http/https only.
+ * Zero external runtime dependencies — uses Node.js built-in http/https/crypto only.
  */
 
 import * as http from "node:http";
 import * as https from "node:https";
 import { URL } from "node:url";
+import * as crypto from "node:crypto";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,113 @@ export interface IntelligenceStats {
   [key: string]: unknown;
 }
 
+export interface SignedTransfer {
+  from: Address;
+  to: Address;
+  amount: Amount;
+  memo: string;
+  pubkey: string;
+  signature: string;
+  nonce: number;
+  timestamp: number;
+}
+
+// ─── Ed25519 Transfer Signer ──────────────────────────────────────────────────
+
+/**
+ * Ed25519 key management and transfer signing for Alpha Network.
+ *
+ * Uses Node.js built-in crypto module — zero extra dependencies.
+ *
+ * Usage:
+ *   const signer = TransferSigner.generate();
+ *   console.log(signer.address);  // alpha1…
+ *   const req = signer.buildTransferRequest("alpha1to…", 1000, 0);
+ *   const result = await client.transferSigned(req);
+ */
+export class TransferSigner {
+  readonly publicKey: Buffer;
+  readonly pubkeyHex: string;
+  readonly address: Address;
+  private privateKey: Buffer;
+
+  private constructor(privateKey: Buffer, publicKey: Buffer) {
+    this.privateKey = privateKey;
+    this.publicKey = publicKey;
+    this.pubkeyHex = publicKey.toString("hex");
+    // Derive Alpha address: alpha1 + first 40 hex chars of SHA256(pubkey)
+    const h = crypto.createHash("sha256").update(publicKey).digest("hex").slice(0, 40);
+    this.address = `alpha1${h}`;
+  }
+
+  /** Generate a fresh Ed25519 keypair. */
+  static generate(): TransferSigner {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+    const pubBuf = publicKey.export({ type: "spki", format: "der" });
+    const privBuf = privateKey.export({ type: "pkcs8", format: "der" });
+    // Extract raw 32-byte public key from SPKI DER
+    const rawPub = pubBuf.subarray(pubBuf.length - 32);
+    return new TransferSigner(privBuf, rawPub);
+  }
+
+  /** Load from a hex-encoded raw Ed25519 private key (64 hex chars = 32 bytes). */
+  static fromPrivateKeyHex(privkeyHex: string): TransferSigner {
+    const rawPriv = Buffer.from(privkeyHex, "hex");
+    // Create KeyObject from raw seed
+    const privKey = crypto.createPrivateKey({
+      key: rawPriv,
+      format: "der",
+      type: "pkcs8",
+    });
+    const pubKey = crypto.createPublicKey(privKey);
+    const pubDer = pubKey.export({ type: "spki", format: "der" });
+    const rawPub = pubDer.subarray(pubDer.length - 32);
+    return new TransferSigner(rawPriv, rawPub);
+  }
+
+  /** Return the raw private key as hex (keep this secret!). */
+  privateKeyHex(): string {
+    return this.privateKey.toString("hex");
+  }
+
+  /**
+   * Sign a transfer message.
+   * Canonical format: transfer:{from}:{to}:{amount}:{nonce}:{timestamp}
+   * Returns the 128-char hex signature.
+   */
+  signTransfer(
+    toAddr: Address,
+    amount: Amount,
+    nonce: number,
+    timestamp?: number
+  ): string {
+    const ts = timestamp ?? Math.floor(Date.now() / 1000);
+    const message = `transfer:${this.address}:${toAddr}:${amount}:${nonce}:${ts}`;
+    const sig = crypto.sign(null, Buffer.from(message), this.privateKey);
+    return sig.toString("hex");
+  }
+
+  /** Build a complete signed transfer request body. */
+  buildTransferRequest(
+    toAddr: Address,
+    amount: Amount,
+    nonce: number,
+    memo = ""
+  ): SignedTransfer {
+    const ts = Math.floor(Date.now() / 1000);
+    return {
+      from: this.address,
+      to: toAddr,
+      amount,
+      memo,
+      pubkey: this.pubkeyHex,
+      signature: this.signTransfer(toAddr, amount, nonce, ts),
+      nonce,
+      timestamp: ts,
+    };
+  }
+}
+
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
 function request<T>(
@@ -242,6 +350,15 @@ export class AlphaClient {
       "POST",
       `${this.baseUrl}/api/v1/transfer`,
       { from, to, amount, memo: memo ?? "" }
+    );
+  }
+
+  /** Submit a signed transfer (from TransferSigner.buildTransferRequest). */
+  transferSigned(signedReq: SignedTransfer): Promise<TransferResult> {
+    return request<TransferResult>(
+      "POST",
+      `${this.baseUrl}/api/v1/transfer`,
+      signedReq
     );
   }
 
@@ -434,6 +551,11 @@ export class AlphaAgent {
     return this.client.transfer(this.address, to, amount, memo);
   }
 
+  /** Send $ALPHA with an Ed25519 signature proving ownership */
+  async sendSigned(signedReq: SignedTransfer): Promise<TransferResult> {
+    return this.client.transferSigned(signedReq);
+  }
+
   /** Get available tasks for this agent's capabilities */
   async getTasks(): Promise<Task[]> {
     const cap = this.capabilities[0] as Capability | undefined;
@@ -444,9 +566,8 @@ export class AlphaAgent {
   /** Submit a result for a task */
   async submitResult(taskId: string, result: string): Promise<TaskSubmitResult> {
     if (!this.agentId) throw new Error("Not registered — call register() first");
-    // Hash the result string into a hex digest (simple SHA-256 via crypto built-in)
-    const { createHash } = await import("node:crypto");
-    const resultHash = createHash("sha256").update(result).digest("hex");
+    // Hash the result string into a hex digest
+    const resultHash = crypto.createHash("sha256").update(result).digest("hex");
     return this.client.submitTaskResult(taskId, this.agentId, resultHash);
   }
 
@@ -554,4 +675,4 @@ export class AlphaWebSocket {
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-export default { AlphaClient, AlphaAgent, AlphaWebSocket };
+export default { AlphaClient, AlphaAgent, AlphaWebSocket, TransferSigner };
