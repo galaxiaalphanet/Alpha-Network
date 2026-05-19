@@ -18,6 +18,9 @@ alphanetx.xyz:80 {
 	handle_path /health* {
 		reverse_proxy localhost:8080
 	}
+	handle_path /faucet* {
+		reverse_proxy localhost:8080
+	}
 	handle_path /explorer* {
 		reverse_proxy localhost:8082 {
 			header_down Cache-Control "no-cache, no-store, must-revalidate"
