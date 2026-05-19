@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	stlibnet "net"
 	"net/http"
 	"strconv"
 	"strings"
+	stdsync "sync"
 	"time"
 
 	"github.com/alpha-network/alpha/chain/agent"
@@ -47,6 +49,16 @@ type Server struct {
 	ipfsClient  *ipfs.Client
 	govModule   *governance.Module
 	allowedCORS []string // allowed CORS origins (empty = allow all, for dev/testnet)
+
+	// Faucet state (testnet only — disabled on mainnet)
+	faucetRequests map[string]*faucetLog // IP → request history
+	faucetMu       stdsync.Mutex
+}
+
+type faucetLog struct {
+	firstRequest time.Time
+	lastRequest  time.Time
+	count        int
 }
 
 // NewServer creates an API server
@@ -272,6 +284,11 @@ func (s *Server) routes() {
 
 	// IPFS content (Phase 4)
 	s.mux.HandleFunc("/api/v1/ipfs/", s.handleIPFS)
+
+	// Faucet (testnet $ALPHA distribution)
+	s.mux.HandleFunc("/faucet", s.handleFaucetPage)
+	s.mux.HandleFunc("POST /api/v1/faucet/send", s.handleFaucetSend)
+	s.mux.HandleFunc("GET /api/v1/faucet/stats", s.handleFaucetStats)
 
 	// Governance (Phase 4)
 	s.mux.HandleFunc("/api/v1/gov/propose", s.handleGovPropose)
@@ -1865,3 +1882,263 @@ func (s *Server) handleHealthDetailed(w http.ResponseWriter, r *http.Request) {
 	report := s.mon.GetHealth()
 	writeJSON(w, http.StatusOK, report)
 }
+
+// ── Faucet handlers ─────────────────────────────────────────────────────
+
+const (
+	faucetAmount       = 5000 // $ALPHA per drop
+	faucetCooldownMin  = 60   // minutes between drops per IP
+	faucetMaxPerDay    = 10   // max drops per IP per day
+)
+
+// handleFaucetPage serves the faucet HTML page.
+func (s *Server) handleFaucetPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(faucetHTML))
+}
+
+// handleFaucetSend dispenses testnet $ALPHA from the protocol treasury.
+// Rate-limited per IP. No signature required (testnet only).
+func (s *Server) handleFaucetSend(w http.ResponseWriter, r *http.Request) {
+	limitBody(w, r)
+
+	var req struct {
+		Address core.Address `json:"address"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	addr := core.Address(strings.TrimSpace(string(req.Address)))
+	if addr == "" || !strings.HasPrefix(string(addr), "alpha1") || len(addr) < 10 {
+		writeError(w, http.StatusBadRequest, "invalid Alpha address (must start with alpha1)")
+		return
+	}
+
+	// Rate limit by IP
+	ip := s.clientIP(r)
+	s.faucetMu.Lock()
+	if s.faucetRequests == nil {
+		s.faucetRequests = make(map[string]*faucetLog)
+	}
+	rl, ok := s.faucetRequests[ip]
+	now := time.Now()
+	if !ok {
+		rl = &faucetLog{firstRequest: now}
+		s.faucetRequests[ip] = rl
+	}
+
+	if !rl.lastRequest.IsZero() && now.Sub(rl.lastRequest) < faucetCooldownMin*time.Minute {
+		remaining := faucetCooldownMin*time.Minute - now.Sub(rl.lastRequest)
+		s.faucetMu.Unlock()
+		writeJSON(w, 429, map[string]interface{}{
+			"error":             "rate limited",
+			"retry_after_secs":  int(remaining.Seconds()),
+		})
+		return
+	}
+
+	if !isSameFaucetDay(rl.firstRequest, now) {
+		rl.firstRequest = now
+		rl.count = 0
+	}
+	if rl.count >= faucetMaxPerDay {
+		s.faucetMu.Unlock()
+		writeError(w, 429, "daily limit reached")
+		return
+	}
+	rl.count++
+	rl.lastRequest = now
+	s.faucetMu.Unlock()
+
+	// Credit the requester directly from the ledger
+	if s.ledger == nil {
+		writeError(w, http.StatusServiceUnavailable, "ledger not available")
+		return
+	}
+
+	if err := s.ledger.Credit(addr, core.Amount(faucetAmount)); err != nil {
+		log.Printf("❌ Faucet: credit failed for %s: %v", addr, err)
+		writeError(w, http.StatusInternalServerError, "faucet error — try again")
+		return
+	}
+
+	log.Printf("🚰 Faucet: %d $ALPHA → %s (IP: %s)", faucetAmount, addr, ip)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"amount":  faucetAmount,
+		"to":      addr,
+		"token":   "$ALPHA",
+		"network": "testnet",
+		"message": fmt.Sprintf("Sent %d testnet $ALPHA! Stake 1,000 to register an agent.", faucetAmount),
+		"next_steps": []string{
+			"Install SDK: pip install alpha-network-sdk  or  npm install alpha-network-sdk",
+			"Register agent: POST /api/v1/agents/register",
+			"Check balance: GET /api/v1/accounts/" + string(addr) + "/balance",
+		},
+	})
+}
+
+// handleFaucetStats returns faucet usage stats.
+func (s *Server) handleFaucetStats(w http.ResponseWriter, r *http.Request) {
+	s.faucetMu.Lock()
+	totalToday := 0
+	for _, rl := range s.faucetRequests {
+		if isSameFaucetDay(rl.firstRequest, time.Now()) {
+			totalToday += rl.count
+		}
+	}
+	uniqueIPs := len(s.faucetRequests)
+	s.faucetMu.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":          true,
+		"drop_amount":      faucetAmount,
+		"cooldown_minutes": faucetCooldownMin,
+		"max_per_day":      faucetMaxPerDay,
+		"drops_today":      totalToday,
+		"unique_ips":       uniqueIPs,
+		"network":          "testnet",
+	})
+}
+
+// clientIP extracts the client IP from the request.
+func (s *Server) clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		parts := strings.Split(fwd, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, _ := stlibnet.SplitHostPort(r.RemoteAddr)
+	return host
+}
+
+func isSameFaucetDay(a, b time.Time) bool {
+	ya, ma, da := a.Date()
+	yb, mb, db := b.Date()
+	return ya == yb && ma == mb && da == db
+}
+
+// faucetHTML is the faucet page served at GET /faucet.
+const faucetHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alpha Network — Testnet Faucet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a1a; color: #e0e0f0;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 1rem;
+  }
+  .card {
+    background: #12123a; border: 1px solid #2a2a6a; border-radius: 16px;
+    padding: 2rem; max-width: 480px; width: 100%;
+    box-shadow: 0 0 40px rgba(80, 80, 255, 0.1);
+  }
+  h1 { font-size: 1.5rem; color: #8080ff; margin-bottom: 0.25rem; }
+  .subtitle { color: #8080aa; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  label { display: block; font-size: 0.85rem; color: #a0a0d0; margin-bottom: 0.3rem; }
+  input {
+    width: 100%; padding: 0.75rem; border-radius: 8px;
+    border: 1px solid #3a3a7a; background: #0a0a2a; color: #e0e0f0;
+    font-size: 0.95rem; font-family: monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: #6060ff; }
+  button {
+    width: 100%; padding: 0.75rem; margin-top: 1rem;
+    border: none; border-radius: 8px; background: #4040ff;
+    color: white; font-size: 1rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+  }
+  button:hover { background: #5050ff; }
+  button:disabled { background: #2a2a5a; cursor: not-allowed; }
+  .result {
+    margin-top: 1rem; padding: 1rem; border-radius: 8px;
+    font-size: 0.9rem; display: none;
+  }
+  .result.success { display: block; background: #0a2a1a; border: 1px solid #1a6a2a; color: #60ff80; }
+  .result.error { display: block; background: #2a0a0a; border: 1px solid #6a1a1a; color: #ff6060; }
+  .info {
+    margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #2a2a5a;
+    font-size: 0.8rem; color: #7070a0;
+  }
+  .info span { color: #a0a0d0; }
+  .logo { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+  .logo-icon { font-size: 1.8rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <span class="logo-icon">🔷</span>
+    <h1>Alpha Network Faucet</h1>
+  </div>
+  <p class="subtitle">Get testnet $ALPHA to register your AI agent.</p>
+
+  <form id="faucet-form" onsubmit="requestFaucet(event)">
+    <label for="address">Your Alpha address</label>
+    <input type="text" id="address" name="address"
+           placeholder="alpha1a1b2c3d4e5f6..." required
+           autocomplete="off" spellcheck="false">
+    <button type="submit" id="submit-btn">🚰 Request 5,000 $ALPHA</button>
+  </form>
+
+  <div id="result" class="result"></div>
+
+  <div class="info">
+    <p>💧 <span>5,000 testnet $ALPHA</span> per drop</p>
+    <p>⏱ <span>60 minute</span> cooldown per IP</p>
+    <p>📊 Max <span>10 drops/day</span></p>
+    <p>💡 Need <span>1,000 $ALPHA</span> to register an agent</p>
+    <p style="margin-top:0.5rem">🔗 <a href="https://alphanetx.xyz" style="color:#8080ff;">alphanetx.xyz</a> &nbsp;|&nbsp; <a href="https://github.com/galaxiaalphanet/Alpha-Network" style="color:#8080ff;">GitHub</a> &nbsp;|&nbsp; <a href="https://discord.gg/CxQb3mZSHc" style="color:#8080ff;">Discord</a></p>
+  </div>
+</div>
+
+<script>
+async function requestFaucet(e) {
+  e.preventDefault();
+  const addr = document.getElementById('address').value.trim();
+  const btn = document.getElementById('submit-btn');
+  const result = document.getElementById('result');
+
+  result.className = 'result';
+  result.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending...';
+
+  try {
+    const resp = await fetch('/api/v1/faucet/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: addr })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      result.className = 'result success';
+      result.innerHTML = '✅ <b>Sent ' + data.amount + ' testnet $ALPHA!</b><br>' +
+        'To: <code>' + data.to + '</code><br>' +
+        'Check: <code>GET /api/v1/accounts/' + addr + '/balance</code>';
+    } else {
+      result.className = 'result error';
+      result.textContent = '❌ ' + (data.error || 'Unknown error');
+      if (data.retry_after_secs) {
+        result.textContent += ' — retry in ' + Math.ceil(data.retry_after_secs/60) + ' min';
+      }
+    }
+  } catch (err) {
+    result.className = 'result error';
+    result.textContent = '❌ Faucet unreachable — try again';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚰 Request 5,000 $ALPHA';
+  }
+}
+</script>
+</body>
+</html>`
