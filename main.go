@@ -152,6 +152,7 @@ func main() {
 	prod := producer.NewBlockProducer(poiEngine, l)
 	prod.SetStore(st)
 	prod.SetMarketplace(marketplace)
+	prod.SetRegistry(registry)
 
 	// ── 10. Data / Intelligence Layer ──────────────────────────────────────────
 	mp := data.NewDataMarketplace(l, core.Address("alpha1_block_rewards_treasury"))
@@ -295,6 +296,8 @@ func main() {
 	log.Printf("Endpoints:")
 	log.Printf("  POST /api/v1/agents/register              — Register AI agent")
 	log.Printf("  GET  /api/v1/agents                       — List agents")
+	log.Printf("  POST /api/v1/agents/{id}/hibernate        — Hibernate agent (preserve stake)")
+	log.Printf("  POST /api/v1/agents/{id}/resume           — Resume from hibernation")
 	log.Printf("  POST /api/v1/transfer                     — Send $ALPHA")
 	log.Printf("  GET  /api/v1/chain/info                   — Chain status")
 	log.Printf("  GET  /api/v1/blocks/latest                — Latest block")
@@ -307,6 +310,7 @@ func main() {
 	log.Printf("  GET  /api/v1/intelligence/query           — Oracle query")
 	log.Printf("  GET  /api/v1/intelligence/stats           — Network stats")
 	log.Printf("  GET  /api/v1/intelligence/top             — Top agents")
+	log.Printf("  GET  /api/v1/intelligence/export          — Export agent records")
 	log.Printf("  WS   /ws                                  — Real-time events (port %d)", *wsPort)
 	log.Printf("  GET  /health                              — Health check")
 	log.Printf("")

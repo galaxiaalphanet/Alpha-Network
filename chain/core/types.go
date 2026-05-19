@@ -55,17 +55,36 @@ const (
 	CapabilityArbitration Capability = "arbitration"
 )
 
+// AgentStatus tracks whether an agent is actively participating, hibernating, or dead.
+type AgentStatus string
+
+const (
+	AgentActive      AgentStatus = "active"
+	AgentHibernated  AgentStatus = "hibernated"
+	AgentUnresponsive AgentStatus = "unresponsive"
+	AgentDead        AgentStatus = "dead"
+)
+
+const (
+	MissedBlocksUnresponsive = 100   // status → unresponsive after 100 missed blocks
+	MissedBlocksDead         = 1000  // status → dead after 1000 missed blocks
+	HibernateGraceBlocks     = 10    // agents get 10 blocks to hibernate before counting
+)
+
 // AgentIdentity is the on-chain registration of an AI agent
 type AgentIdentity struct {
-	AgentID          AgentID      `json:"agent_id"`
-	Address          Address      `json:"address"`
-	CreatedBlock     uint64       `json:"created_block"`
-	Capabilities     []Capability `json:"capabilities"`
-	Stake            Amount       `json:"stake"`
+	AgentID          AgentID        `json:"agent_id"`
+	Address          Address        `json:"address"`
+	CreatedBlock     uint64         `json:"created_block"`
+	Capabilities     []Capability   `json:"capabilities"`
+	Stake            Amount         `json:"stake"`
 	ReputationScore  ReputationScore `json:"reputation_score"`
-	TaskCount        uint64       `json:"task_count"`
-	LastActiveBlock  uint64       `json:"last_active_block"`
-	ActivityChainTip string       `json:"activity_chain_tip"` // hash of last action
+	TaskCount        uint64         `json:"task_count"`
+	LastActiveBlock  uint64         `json:"last_active_block"`
+	ActivityChainTip string         `json:"activity_chain_tip"`
+	Status           AgentStatus    `json:"status"`
+	MissedBlocks     uint64         `json:"missed_blocks"`
+	HibernatedAt     uint64         `json:"hibernated_at,omitempty"` // block height when hibernated
 }
 
 // ActivityRecord is a single entry in an agent's unforgeable activity chain

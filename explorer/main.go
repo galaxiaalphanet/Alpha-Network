@@ -572,10 +572,15 @@ function getTierBadge(tier){
   return '<span class="badge tier-seed">Seed</span>';
 }
 
-function getStatusBadge(active){
-  if(active===true||active==='true'||active===1||active==='active'||active=='Active')
-    return '<span class="badge badge-green">Active</span>';
-  return '<span class="badge badge-gray">Inactive</span>';
+function getStatusBadge(status){
+  if(!status) return '<span class="badge badge-gray">—</span>';
+  switch(String(status).toLowerCase()){
+    case 'active':     return '<span class="badge badge-green">🟢 Active</span>';
+    case 'hibernated': return '<span class="badge badge-blue">💤 Hibernated</span>';
+    case 'unresponsive': return '<span class="badge badge-orange">⚠️ Unresponsive</span>';
+    case 'dead':       return '<span class="badge badge-red">💀 Dead</span>';
+    default:           return '<span class="badge badge-gray">'+status+'</span>';
+  }
 }
 
 function sortAgents(field){
@@ -1464,11 +1469,29 @@ func handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	d.Balance = safeInt(agent, "balance")
 	d.CreatedBlock = safeInt(id, "created_block")
 	d.LastActive = safeInt(id, "last_active_block")
-	d.Status = "Active"
-	d.StatusClass = "badge-green"
-	if d.Reputation < 10 {
-		d.Status = "Inactive"
+
+	// Read actual agent status from the API response
+	switch safeStr(id, "status") {
+	case "active":
+		d.Status = "🟢 Active"
+		d.StatusClass = "badge-green"
+	case "hibernated":
+		d.Status = "💤 Hibernated"
+		d.StatusClass = "badge-blue"
+	case "unresponsive":
+		d.Status = "⚠️ Unresponsive"
+		d.StatusClass = "badge-orange"
+	case "dead":
+		d.Status = "💀 Dead"
+		d.StatusClass = "badge-red"
+	default:
+		d.Status = "⚪ Unknown"
 		d.StatusClass = "badge-gray"
+	}
+
+	// Read missed blocks for additional context
+	if missed := safeInt(id, "missed_blocks"); missed > 0 {
+		d.Status += fmt.Sprintf(" (%d missed)", missed)
 	}
 	stake := d.Stake
 	switch {

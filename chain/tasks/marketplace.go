@@ -13,6 +13,7 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -263,6 +264,46 @@ func (m *Marketplace) AssignToAgent(taskID string, agentID core.AgentID) error {
 
 // SubmitResult records an agent's result for a task. The resultHash should be
 // a content hash of the result; ipfsCID is the IPFS CID where the full result is pinned.
+
+// ReassignTasksFromAgent returns all tasks assigned to a dead/unresponsive agent
+// back to the pending queue so other agents can claim them.
+func (m *Marketplace) ReassignTasksFromAgent(agentID core.AgentID) error {
+	if agentID == "" {
+		return errors.New("agentID cannot be empty")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	reassigned := 0
+	for _, task := range m.tasks {
+		if task.Status != core.TaskAssigned && task.Status != core.TaskSubmitted {
+			continue
+		}
+		// Check if this agent is assigned
+		for _, assigned := range task.AssignedTo {
+			if assigned == agentID {
+				// Remove agent from assigned list and return task to pending
+				task.Status = core.TaskPending
+				newAssigned := make([]core.AgentID, 0, len(task.AssignedTo)-1)
+				for _, a := range task.AssignedTo {
+					if a != agentID {
+						newAssigned = append(newAssigned, a)
+					}
+				}
+				task.AssignedTo = newAssigned
+				m.queue.Push(task)
+				reassigned++
+				break
+			}
+		}
+	}
+	if reassigned > 0 {
+		log.Printf("🔄 Reassigned %d tasks from dead agent %s back to pending queue", reassigned, agentID)
+	}
+	return nil
+}
+
 func (m *Marketplace) SubmitResult(agentID core.AgentID, taskID string, resultHash string, ipfsCID string) error {
 	if agentID == "" {
 		return errors.New("agentID cannot be empty")

@@ -374,8 +374,31 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/v1/agents/{agent_id}
+// Also handles POST /api/v1/agents/{agent_id}/hibernate and /resume
 func (s *Server) handleAgentGet(w http.ResponseWriter, r *http.Request) {
-	agentID := core.AgentID(r.URL.Path[len("/api/v1/agents/"):])
+	raw := strings.TrimPrefix(r.URL.Path, "/api/v1/agents/")
+
+	// POST /api/v1/agents/{id}/hibernate
+	if strings.HasSuffix(raw, "/hibernate") && r.Method == http.MethodPost {
+		agentID := core.AgentID(strings.TrimSuffix(raw, "/hibernate"))
+		s.handleAgentHibernate(w, r, agentID)
+		return
+	}
+
+	// POST /api/v1/agents/{id}/resume
+	if strings.HasSuffix(raw, "/resume") && r.Method == http.MethodPost {
+		agentID := core.AgentID(strings.TrimSuffix(raw, "/resume"))
+		s.handleAgentResume(w, r, agentID)
+		return
+	}
+
+	// GET /api/v1/agents/{id}
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET or POST required")
+		return
+	}
+
+	agentID := core.AgentID(raw)
 	if agentID == "" {
 		writeError(w, http.StatusBadRequest, "agent_id required")
 		return
@@ -423,6 +446,78 @@ func (s *Server) handleAgentList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"agents": agents,
 		"count":  len(agents),
+	})
+}
+
+// POST /api/v1/agents/{id}/hibernate — gracefully pause an agent.
+// Preserves stake and reputation. Agent can resume later.
+func (s *Server) handleAgentHibernate(w http.ResponseWriter, r *http.Request, agentID core.AgentID) {
+	if agentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id required")
+		return
+	}
+
+	// Verify agent exists
+	identity, err := s.registry.GetAgent(agentID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	blockHeight := uint64(0)
+	if s.producer != nil {
+		blockHeight = s.producer.GetChainHeight()
+	}
+
+	if err := s.registry.Hibernate(agentID, blockHeight); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":       true,
+		"agent_id":      string(agentID),
+		"status":        "hibernated",
+		"stake":         identity.Stake,
+		"reputation":    identity.ReputationScore,
+		"hibernated_at": blockHeight,
+		"message":       "Agent hibernated. Stake and reputation preserved. POST /resume to reactivate.",
+	})
+}
+
+// POST /api/v1/agents/{id}/resume — bring an agent back from hibernation.
+// Agent resumes with stake and reputation intact.
+func (s *Server) handleAgentResume(w http.ResponseWriter, r *http.Request, agentID core.AgentID) {
+	if agentID == "" {
+		writeError(w, http.StatusBadRequest, "agent_id required")
+		return
+	}
+
+	// Verify agent exists
+	identity, err := s.registry.GetAgent(agentID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	blockHeight := uint64(0)
+	if s.producer != nil {
+		blockHeight = s.producer.GetChainHeight()
+	}
+
+	if err := s.registry.Resume(agentID, blockHeight); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"agent_id":    string(agentID),
+		"status":      "active",
+		"stake":       identity.Stake,
+		"reputation":  identity.ReputationScore,
+		"resumed_at":  blockHeight,
+		"message":     "Agent resumed. All stake and reputation intact. Welcome back.",
 	})
 }
 
