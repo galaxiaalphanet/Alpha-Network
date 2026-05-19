@@ -31,8 +31,15 @@ mkdir -p "$DATA_ROOT"/{node1,node2,node3,logs}
 cleanup() {
     echo ""
     echo "🛑 Shutting down all nodes..."
-    kill $PID1 $PID2 $PID3 2>/dev/null || true
-    wait $PID1 $PID2 $PID3 2>/dev/null || true
+    # Kill only the test nodes by their data dir flag
+    for pid in $(pgrep -f "alphanode.*alpha-p2p-test" 2>/dev/null || true); do
+        kill "$pid" 2>/dev/null || true
+    done
+    # Also kill by known PIDs if still tracked
+    for pid in $PID1 $PID2 $PID3; do
+        kill "$pid" 2>/dev/null || true
+    done
+    sleep 2
     echo "✅ All nodes stopped."
     echo "Logs saved to: $LOG_DIR"
     exit 0
@@ -52,8 +59,8 @@ echo "   Duration: ${DURATION_HOURS}h"
 echo "   Health check: log-file parsing (not HTTP polling)"
 echo ""
 
-# Kill any leftover test nodes
-pkill -f "alphanode.*alpha-p2p-test" 2>/dev/null || true
+# Kill any leftover test nodes (only those using the alpha-p2p-test data dir)
+pgrep -f "alphanode.*alpha-p2p-test" 2>/dev/null | xargs -r kill 2>/dev/null || true
 sleep 1
 
 # Clean data dirs for fresh start
@@ -122,21 +129,28 @@ get_height_from_log() {
     fi
 }
 
-# ── Helper: check if a node is still producing (recent block in last 30s) ──
+# ── Helper: check if a node is still producing (log file modified in last 120s) ──
 is_node_alive() {
     local logfile="$1"
     if [ ! -f "$logfile" ]; then
         return 1
     fi
-    # Check if there's a "Block N produced" line in the last 60 chars
-    # A healthy node produces a block every 500ms, so 30s threshold is generous
-    local last_line
-    last_line=$(grep "📦 Block" "$logfile" 2>/dev/null | tail -1)
-    if [ -z "$last_line" ]; then
+    # A healthy node produces a block every 500ms.
+    # Check mtime of the log file — if it hasn't been modified in 120s, stalled.
+    local now
+    now=$(date +%s)
+    local mtime
+    mtime=$(stat -c %Y "$logfile" 2>/dev/null || echo 0)
+    local age=$((now - mtime))
+    if [ $age -gt 120 ]; then
         return 1
     fi
     return 0
 }
+
+CHECK_INTERVAL=60  # seconds
+DIVERGENCE_COUNT=0
+ITERATION=0
 
 echo "📊 Monitoring started — checking consensus every ${CHECK_INTERVAL}s for ${DURATION_HOURS}h"
 echo "   $(date -u)"
@@ -145,10 +159,6 @@ echo ""
 log_event() {
     echo "[$(date -u +%H:%M:%S)] $1" | tee -a "$LOG_DIR/events.log"
 }
-
-CHECK_INTERVAL=60  # seconds
-DIVERGENCE_COUNT=0
-ITERATION=0
 
 while true; do
     NOW=$(date +%s)
@@ -165,24 +175,14 @@ while true; do
     H2=$(get_height_from_log "$L2")
     H3=$(get_height_from_log "$L3")
 
-    # ── Process-level health: check PIDs are alive ──
-    FAILURES=0
-    if ! kill -0 $PID1 2>/dev/null; then FAILURES=$((FAILURES + 1)); fi
-    if ! kill -0 $PID2 2>/dev/null; then FAILURES=$((FAILURES + 1)); fi
-    if ! kill -0 $PID3 2>/dev/null; then FAILURES=$((FAILURES + 1)); fi
-
-    if [ $FAILURES -gt 0 ]; then
-        log_event "🔴 CRITICAL: $FAILURES node(s) crashed!"
-        DIVERGENCE_COUNT=$((DIVERGENCE_COUNT + 1))
-    fi
-
     # ── Log-based liveness: check nodes are producing blocks ──
-    STALLED=0
-    is_node_alive "$L1" || STALLED=$((STALLED + 1))
-    is_node_alive "$L2" || STALLED=$((STALLED + 1))
-    is_node_alive "$L3" || STALLED=$((STALLED + 1))
-    if [ $STALLED -gt 0 ]; then
-        log_event "⚠️  $STALLED node(s) stalled — no recent blocks in log"
+    CRASHED=0
+    is_node_alive "$L1" || { CRASHED=$((CRASHED + 1)); H1="CRASH"; }
+    is_node_alive "$L2" || { CRASHED=$((CRASHED + 1)); H2="CRASH"; }
+    is_node_alive "$L3" || { CRASHED=$((CRASHED + 1)); H3="CRASH"; }
+    if [ $CRASHED -gt 0 ]; then
+        log_event "🔴 CRITICAL: $CRASHED node(s) stalled/crashed — no recent blocks in log"
+        DIVERGENCE_COUNT=$((DIVERGENCE_COUNT + 1))
     fi
 
     # ── Divergence check (allow ±10 blocks tolerance for propagation delay) ──
