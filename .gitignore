@@ -47,3 +47,15 @@ WALLETS.md
 # Wallet generator (references crypto paths, local tool)
 cmd/wallet/
 cmd/tls-proxy/tls-proxy
+
+# Faucet binary
+cmd/faucet/faucet
+
+# TypeScript SDK build output (built on publish, not committed)
+sdk/typescript/dist/
+sdk/typescript/package-lock.json
+sdk/typescript/examples/*.js
+sdk/typescript/examples/*.d.ts
+sdk/typescript/examples/*.js.map
+sdk/typescript/examples/*.d.ts.map
+sdk/typescript/node_modules/

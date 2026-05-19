@@ -37,6 +37,7 @@ type MetaPersister func(key string, value []byte) error
 type Ledger struct {
 	mu              sync.RWMutex
 	balances        map[core.Address]core.Amount
+	nonces          map[core.Address]int64 // per-address nonce for replay protection
 	txLog           []*TxRecord
 	totalBurned     core.Amount
 	totalSupply     core.Amount
@@ -48,6 +49,7 @@ type Ledger struct {
 func NewLedger(totalSupply core.Amount) *Ledger {
 	return &Ledger{
 		balances:    make(map[core.Address]core.Amount),
+		nonces:      make(map[core.Address]int64),
 		txLog:       make([]*TxRecord, 0, 1024),
 		totalSupply: totalSupply,
 	}
@@ -131,9 +133,10 @@ func (l *Ledger) Debit(addr core.Address, amount core.Amount) error {
 	return nil
 }
 
-// Transfer atomically moves $ALPHA from one address to another
-// Returns the TxID or an error (overdraft / invalid amounts)
-func (l *Ledger) Transfer(from, to core.Address, amount core.Amount, memo string) (string, error) {
+// InternalTransfer moves $ALPHA between two addresses WITHOUT nonce validation.
+// Used by the block producer when processing mempool transactions (nonce already
+// validated at submission time) and by the intelligence marketplace for data purchases.
+func (l *Ledger) InternalTransfer(from, to core.Address, amount core.Amount, memo string) (string, error) {
 	if amount <= 0 {
 		return "", errors.New("transfer amount must be positive")
 	}
@@ -143,6 +146,50 @@ func (l *Ledger) Transfer(from, to core.Address, amount core.Amount, memo string
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	bal := l.balances[from]
+	if bal < amount {
+		return "", fmt.Errorf("insufficient balance")
+	}
+
+	l.balances[from] -= amount
+	l.balances[to] += amount
+
+	txID := l.genTxID("internal_transfer", string(from)+string(to))
+	l.recordTx(&TxRecord{
+		TxID:      txID,
+		Type:      "internal_transfer",
+		From:      from,
+		To:        to,
+		Amount:    amount,
+		Memo:      memo,
+		Timestamp: time.Now().Unix(),
+	})
+
+	l.saveBalance(from)
+	l.saveBalance(to)
+	return txID, nil
+}
+
+// Transfer atomically moves $ALPHA from one address to another.
+// Returns the TxID or an error (overdraft / invalid amounts / nonce violation).
+// nonce is the sender's per-address nonce for replay protection; must be
+// exactly one greater than the last used nonce (or 0 for first transfer).
+func (l *Ledger) Transfer(from, to core.Address, amount core.Amount, memo string, nonce int64) (string, error) {
+	if amount <= 0 {
+		return "", errors.New("transfer amount must be positive")
+	}
+	if from == to {
+		return "", errors.New("from and to addresses must differ")
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Per-address nonce validation — prevents replay attacks
+	if err := l.validateNonce(from, nonce); err != nil {
+		return "", err
+	}
 
 	bal := l.balances[from]
 	if bal < amount {
@@ -163,6 +210,7 @@ func (l *Ledger) Transfer(from, to core.Address, amount core.Amount, memo string
 		Timestamp: time.Now().Unix(),
 	})
 
+	l.nonces[from] = nonce // record the consumed nonce
 	l.saveBalance(from)
 	l.saveBalance(to)
 	return txID, nil
@@ -192,6 +240,7 @@ func (l *Ledger) BurnSupply(addr core.Address, amount core.Amount) error {
 
 	l.balances[addr] -= amount
 	l.totalBurned += amount
+	l.totalSupply -= amount // consistent with BurnFromProtocol — burn reduces total supply
 
 	l.recordTx(&TxRecord{
 		TxID:      l.genTxID("burn", string(addr)),
@@ -208,7 +257,8 @@ func (l *Ledger) BurnSupply(addr core.Address, amount core.Amount) error {
 }
 
 // BurnFromProtocol burns tokens from the protocol treasury (no address needed)
-// Used for fee burns that originate from the protocol itself
+// Used for fee burns that originate from the protocol itself.
+// Semantically consistent with BurnSupply: both reduce totalSupply + increment totalBurned.
 func (l *Ledger) BurnFromProtocol(amount core.Amount) error {
 	if amount <= 0 {
 		return errors.New("burn amount must be positive")
@@ -342,6 +392,31 @@ func (l *Ledger) SetTotalSupply(amount core.Amount) {
 }
 
 // --- internal helpers ---
+
+// validateNonce checks that the provided nonce is exactly lastUsed+1 (or 0 for first tx).
+// Caller must hold l.mu Lock.
+func (l *Ledger) validateNonce(addr core.Address, nonce int64) error {
+	lastUsed, exists := l.nonces[addr]
+	if !exists {
+		// First transaction for this address — nonce must be 0
+		if nonce != 0 {
+			return fmt.Errorf("invalid nonce: expected 0 for first transfer, got %d", nonce)
+		}
+		return nil
+	}
+	expected := lastUsed + 1
+	if nonce != expected {
+		return fmt.Errorf("invalid nonce: expected %d, got %d", expected, nonce)
+	}
+	return nil
+}
+
+// Nonce returns the last used nonce for an address (0 if never seen).
+func (l *Ledger) Nonce(addr core.Address) int64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.nonces[addr]
+}
 
 func (l *Ledger) recordTx(tx *TxRecord) {
 	l.txLog = append(l.txLog, tx)

@@ -172,7 +172,7 @@ func (m *DataMarketplace) PurchaseAccess(buyerID core.AgentID, datasetID string,
 	ownerAmount := price - burnAmount
 
 	// Transfer from buyer to owner
-	_, err := m.ledger.Transfer(buyerAddr, ownerAddr, ownerAmount,
+	_, err := m.ledger.InternalTransfer(buyerAddr, ownerAddr, ownerAmount,
 		fmt.Sprintf("data purchase: dataset %s", datasetID))
 	if err != nil {
 		return nil, fmt.Errorf("transfer failed: %w", err)

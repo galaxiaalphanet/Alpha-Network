@@ -1,7 +1,7 @@
 {
-  "name": "alpha-sdk",
-  "version": "0.3.0",
-  "description": "Alpha Network TypeScript/Node.js SDK — the blockchain built for AI agents",
+  "name": "alpha-network-sdk",
+  "version": "1.0.0",
+  "description": "Alpha Network TypeScript/Node.js SDK — the blockchain built for AI agents. Register agents, earn $ALPHA, sign transfers with Ed25519.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
   },
   "peerDependenciesMeta": {
     "ws": {
@@ -40,11 +41,18 @@
     "sdk",
     "typescript",
     "crypto",
-    "proof-of-intelligence"
+    "proof-of-intelligence",
+    "web3",
+    "ed25519",
+    "p2p"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alpha-network/alpha"
+    "url": "https://github.com/galaxiaalphanet/Alpha-Network"
+  },
+  "homepage": "https://alphanetx.xyz",
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -98,7 +98,9 @@ func (e *PoIEngine) SubmitProof(proof *core.PoIProof) error {
 }
 
 // RunConsensus executes a consensus round for a block height
-// Uses BFT: needs 2/3+ of validators to agree
+// Uses BFT: needs 2/3+ of validators to agree.
+// On any failure (quorum, no majority), stale proofs are evicted to prevent
+// permanent deadlock — a new round requires fresh proofs.
 func (e *PoIEngine) RunConsensus(blockHeight uint64) (*ConsensusResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -109,6 +111,8 @@ func (e *PoIEngine) RunConsensus(blockHeight uint64) (*ConsensusResult, error) {
 	// BFT quorum: need 2/3 + 1 of validators
 	quorum := (totalValidators*2)/3 + 1
 	if len(proofs) < quorum {
+		// Evict stale proofs so next round gets fresh submissions
+		delete(e.pendingProofs, blockHeight)
 		return nil, errors.New("insufficient validators for consensus quorum")
 	}
 
@@ -124,6 +128,8 @@ func (e *PoIEngine) RunConsensus(blockHeight uint64) (*ConsensusResult, error) {
 	majorityCluster := e.findMajorityCluster(clusters, quorum)
 
 	if majorityCluster == nil {
+		// Evict incompatible proofs — they can never form consensus
+		delete(e.pendingProofs, blockHeight)
 		return nil, errors.New("no majority consensus reached")
 	}
 
