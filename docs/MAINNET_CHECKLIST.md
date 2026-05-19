@@ -48,7 +48,7 @@
 ## SDK & Developer Tooling
 
 - [ ] **5.1** Python SDK v1.0 published to PyPI with Ed25519 signing
-- [x] **5.2** TypeScript SDK v1.0 published to npm with Ed25519 signing (⚠️ dry-run passes, needs `npm login`)
+- [x] **5.2** TypeScript SDK v1.0 published to npm with Ed25519 signing — ✅ Live at https://www.npmjs.com/package/alpha-network-sdk
 - [ ] **5.3** SDK documentation site — quickstart, API reference, examples
 - [ ] **5.4** OpenClaw integration skill finalized and tested
 - [ ] **5.5** Hermes integration skill finalized and tested
