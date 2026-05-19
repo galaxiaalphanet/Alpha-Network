@@ -106,6 +106,121 @@ func (r *Registry) GetAgentByAddress(addr core.Address) (*core.AgentIdentity, er
 	return agent, nil
 }
 
+// Hibernate marks an agent as gracefully paused. Stake and reputation are preserved.
+// Returns an error if the agent is dead (dead agents cannot hibernate).
+func (r *Registry) Hibernate(agentID core.AgentID, blockHeight uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	agent, ok := r.agents[agentID]
+	if !ok {
+		return fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	if agent.Status == core.AgentDead {
+		return fmt.Errorf("dead agents cannot hibernate: %s", agentID)
+	}
+
+	agent.Status = core.AgentHibernated
+	agent.HibernatedAt = blockHeight
+	agent.MissedBlocks = 0
+	return nil
+}
+
+// Resume brings an agent back from hibernation or unresponsive state.
+// Stake and reputation are fully preserved.
+func (r *Registry) Resume(agentID core.AgentID, blockHeight uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	agent, ok := r.agents[agentID]
+	if !ok {
+		return fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	if agent.Status == core.AgentDead {
+		return fmt.Errorf("dead agents cannot resume — re-registration required")
+	}
+
+	agent.Status = core.AgentActive
+	agent.LastActiveBlock = blockHeight
+	agent.MissedBlocks = 0
+	agent.HibernatedAt = 0
+	return nil
+}
+
+// SlashAgent deducts the slashing penalty from an agent's stake.
+// Called when an agent is marked dead.
+func (r *Registry) SlashAgent(agentID core.AgentID) (core.Amount, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	agent, ok := r.agents[agentID]
+	if !ok {
+		return 0, fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	slashAmount := core.Amount(float64(agent.Stake) * core.SlashPenalty)
+	if slashAmount < 1 {
+		slashAmount = 1
+	}
+	agent.Stake -= slashAmount
+	return slashAmount, nil
+}
+
+// CheckAgentHealth evaluates all registered agents and updates status for those
+// who have missed too many blocks without hibernating. Called once per block.
+//
+// Rules:
+//   - Agents with MissedBlocks >= 1000 → marked dead, stake slashed
+//   - Agents with MissedBlocks >= 100  → marked unresponsive (if still active)
+//   - Hibernated agents never penalized (they declared intent)
+//   - Dead agents are skipped
+//
+// Returns lists of agents newly marked dead and unresponsive for the caller to
+// act on (slash ledger, reassign tasks, log events).
+func (r *Registry) CheckAgentHealth(currentBlock uint64) (dead []core.AgentID, unresponsive []core.AgentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for id, agent := range r.agents {
+		switch agent.Status {
+		case core.AgentDead:
+			// Already dead — nothing to do
+			continue
+
+		case core.AgentHibernated:
+			// Hibernated agents are safe — they declared intent
+			// But still count missed blocks (they may have hibernated mid-cycle)
+			continue
+
+		case core.AgentActive, core.AgentUnresponsive:
+			// Calculate missed blocks since last activity
+			if agent.LastActiveBlock < currentBlock {
+				agent.MissedBlocks = currentBlock - agent.LastActiveBlock
+			} else {
+				agent.MissedBlocks = 0
+			}
+
+			if agent.MissedBlocks >= core.MissedBlocksDead {
+				// Mark dead + slash
+				agent.Status = core.AgentDead
+				slashAmount := core.Amount(float64(agent.Stake) * core.SlashPenalty)
+				if slashAmount < 1 {
+					slashAmount = 1
+				}
+				agent.Stake -= slashAmount
+				dead = append(dead, id)
+			} else if agent.MissedBlocks >= core.MissedBlocksUnresponsive && agent.Status == core.AgentActive {
+				agent.Status = core.AgentUnresponsive
+				unresponsive = append(unresponsive, id)
+			}
+		}
+	}
+
+	return dead, unresponsive
+}
+
 // ListAgents returns all registered agents (optionally filtered by capability)
 func (r *Registry) ListAgents(capability *core.Capability) []*core.AgentIdentity {
 	r.mu.RLock()

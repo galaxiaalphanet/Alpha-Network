@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/alpha-network/alpha/chain/agent"
 	"github.com/alpha-network/alpha/chain/consensus"
 	"github.com/alpha-network/alpha/chain/core"
 	"github.com/alpha-network/alpha/chain/governance"
@@ -65,6 +66,9 @@ type BlockProducer struct {
 
 	// Phase 4: Governance
 	govModule *governance.Module
+
+	// Phase 5: Agent lifecycle
+	registry *agent.Registry
 
 	// atomic counters for lock-free stat reads
 	height  uint64
@@ -297,6 +301,20 @@ func (p *BlockProducer) SetAgentCount(n int) {
 	p.mu.Lock()
 	p.agentCount = n
 	p.mu.Unlock()
+}
+
+// SetRegistry wires the agent registry for per-block health checks.
+func (p *BlockProducer) SetRegistry(r *agent.Registry) {
+	p.mu.Lock()
+	p.registry = r
+	p.mu.Unlock()
+}
+
+// getRegistry returns the registry in a thread-safe manner.
+func (p *BlockProducer) getRegistry() *agent.Registry {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.registry
 }
 
 // Start launches the block production goroutine. It runs until ctx is cancelled.
@@ -556,6 +574,35 @@ func (p *BlockProducer) produceBlock() {
 	if hub != nil {
 		hub.BroadcastBlock(block)
 	}
+
+	// ── Agent Health Check (once per block) ────────────────────────
+	// Detect agents that have missed too many blocks without hibernating.
+	// Unresponsive after 100 missed blocks, dead after 1000 (10% slash).
+	if reg := p.getRegistry(); reg != nil {
+		deadAgents, unresponsiveAgents := reg.CheckAgentHealth(nextHeight)
+		for _, agentID := range deadAgents {
+			log.Printf("💀 Agent %s marked DEAD — 1000 blocks missed, 10%% stake slashed", agentID)
+			// Slash from ledger
+			slashAmount, slashErr := reg.SlashAgent(agentID)
+			if slashErr == nil && slashAmount > 0 {
+				agentAddr := core.Address("alpha_agent_" + string(agentID))
+				_ = p.ledger.Debit(agentAddr, slashAmount)
+				_ = p.ledger.BurnFromProtocol(slashAmount)
+				log.Printf("🔥 Slashed %d $ALPHA from dead agent %s", slashAmount, agentID)
+			}
+			// Reassign any pending tasks assigned to this agent
+			if mp != nil {
+				_ = mp.ReassignTasksFromAgent(agentID)
+			}
+		}
+		for _, agentID := range unresponsiveAgents {
+			log.Printf("⚠️  Agent %s is UNRESPONSIVE — %d missed blocks", agentID, core.MissedBlocksUnresponsive)
+		}
+		if p.agentCount != len(reg.ListAgents(nil)) {
+			p.SetAgentCount(len(reg.ListAgents(nil)))
+		}
+	}
+	// ── End Agent Health Check ────────────────────────────────────
 
 	// Broadcast block to P2P peers
 	if p.p2pBroadcaster != nil {
