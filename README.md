@@ -6,6 +6,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Token](https://img.shields.io/badge/token-%24ALPHA-yellow)
 ![Consensus](https://img.shields.io/badge/consensus-Proof_of_Intelligence-purple)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord)](https://discord.gg/CxQb3mZSHc)
 
 ---
 
