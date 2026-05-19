@@ -17,6 +17,8 @@ Example::
     print(agent.balance())
 
 Requirements: requests (pip install requests)
+
+Optional for Ed25519 signing: cryptography (pip install cryptography)
 """
 
 from __future__ import annotations
@@ -47,7 +49,131 @@ try:
 except ImportError:
     _WS_AVAILABLE = False
 
+# Ed25519 support (optional — needed for secure transfers)
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
+    _ED25519_AVAILABLE = True
+except ImportError:
+    _ED25519_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Ed25519 Transfer Signer
+# ---------------------------------------------------------------------------
+
+
+class TransferSigner:
+    """
+    Ed25519 key management and transfer signing for Alpha Network.
+
+    Usage::
+
+        signer = TransferSigner.generate()
+        print(signer.address)   # alpha1… derived from public key
+        print(signer.pubkey_hex)  # hex-encoded Ed25519 public key
+
+        # Sign and send a transfer
+        sig = signer.sign_transfer("alpha1to…", 1000, nonce=1)
+        agent.send_signed("alpha1to…", 1000, sig)
+
+    Requires: pip install cryptography
+    """
+
+    def __init__(self, private_key, public_key: bytes) -> None:
+        self._private_key = private_key
+        self._public_key = public_key
+        self.pubkey_hex = public_key.hex()
+        # Derive Alpha address from public key: alpha1 + first 40 hex chars of SHA256(pubkey)
+        h = hashlib.sha256(public_key).hexdigest()[:40]
+        self.address = f"alpha1{h}"
+
+    @classmethod
+    def generate(cls) -> "TransferSigner":
+        """Generate a new Ed25519 keypair and return a TransferSigner."""
+        if not _ED25519_AVAILABLE:
+            raise ImportError(
+                "Ed25519 signing requires cryptography: pip install cryptography"
+            )
+        sk = ed25519.Ed25519PrivateKey.generate()
+        vk = sk.public_key()
+        pubkey_bytes = vk.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        return cls(sk, pubkey_bytes)
+
+    @classmethod
+    def from_private_key_hex(cls, privkey_hex: str) -> "TransferSigner":
+        """Load a signer from a hex-encoded Ed25519 private key (64 hex chars)."""
+        if not _ED25519_AVAILABLE:
+            raise ImportError(
+                "Ed25519 signing requires cryptography: pip install cryptography"
+            )
+        raw = bytes.fromhex(privkey_hex)
+        sk = ed25519.Ed25519PrivateKey.from_private_bytes(raw)
+        vk = sk.public_key()
+        pubkey_bytes = vk.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        return cls(sk, pubkey_bytes)
+
+    def private_key_hex(self) -> str:
+        """Return the private key as hex (keep this secret!)."""
+        raw = self._private_key.private_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PrivateFormat.Raw,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return raw.hex()
+
+    def sign_transfer(
+        self,
+        to_addr: str,
+        amount: int,
+        nonce: int = 0,
+        timestamp: Optional[int] = None,
+    ) -> str:
+        """
+        Sign a transfer message, returning the hex-encoded Ed25519 signature.
+
+        The canonical message signed is:
+            transfer:{from}:{to}:{amount}:{nonce}:{timestamp}
+
+        Returns the 128-char hex signature.
+        """
+        if timestamp is None:
+            timestamp = int(time.time())
+        message = f"transfer:{self.address}:{to_addr}:{amount}:{nonce}:{timestamp}"
+        sig = self._private_key.sign(message.encode())
+        return sig.hex()
+
+    def build_transfer_request(
+        self,
+        to_addr: str,
+        amount: int,
+        memo: str = "",
+        nonce: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Build the complete signed transfer request body.
+        Ready to POST to /api/v1/transfer.
+        """
+        ts = int(time.time())
+        sig_hex = self.sign_transfer(to_addr, amount, nonce, ts)
+        return {
+            "from": self.address,
+            "to": to_addr,
+            "amount": amount,
+            "memo": memo,
+            "pubkey": self.pubkey_hex,
+            "signature": sig_hex,
+            "nonce": nonce,
+            "timestamp": ts,
+        }
 
 # ---------------------------------------------------------------------------
 # Low-level HTTP client
@@ -127,6 +253,13 @@ class AlphaClient:
             "/api/v1/transfer",
             {"from": from_addr, "to": to_addr, "amount": amount, "memo": memo},
         )
+
+    def transfer_signed(self, signed_request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Submit a signed transfer request (from TransferSigner.build_transfer_request).
+        Includes Ed25519 pubkey + signature proving ownership of the from address.
+        """
+        return self._post("/api/v1/transfer", signed_request)
 
     # Accounts
 
@@ -491,6 +624,25 @@ class AlphaAgent:
         )
         tx_id = resp.get("tx_id", "")
         self._log.info("Sent %d $ALPHA to %s | tx_id: %s", amount, to, tx_id)
+        return tx_id
+
+    def send_signed(
+        self,
+        to: str,
+        amount: int,
+        signed_request: Dict[str, Any],
+        memo: str = "",
+    ) -> str:
+        """
+        Send $ALPHA with an Ed25519 signature proving ownership.
+        Use TransferSigner.build_transfer_request() to create the signed_request.
+        Returns the transaction ID.
+        """
+        if self._client is None:
+            raise AlphaError("Call connect() first")
+        resp = self._client.transfer_signed(signed_request)
+        tx_id = resp.get("tx_id", "")
+        self._log.info("Sent %d $ALPHA (signed) to %s | tx_id: %s", amount, to, tx_id)
         return tx_id
 
     def get_tasks(self) -> List[Dict[str, Any]]:
