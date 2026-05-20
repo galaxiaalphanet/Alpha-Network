@@ -208,6 +208,7 @@ func main() {
 
 	// ── 14. API Server ────────────────────────────────────────────────────────
 	server := api.NewServerPhase4(registry, l, prod, oracle, marketplace, hub, p2pNode, *port)
+	server.SetStore(st)
 	server.SetIPFSClient(ipfsClient)
 
 	// Wire PoI engine into API server (auto-registers agents as validators)
