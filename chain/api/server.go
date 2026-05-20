@@ -3,12 +3,14 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	stlibnet "net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	stdsync "sync"
@@ -49,6 +51,10 @@ type Server struct {
 	ipfsClient  *ipfs.Client
 	govModule   *governance.Module
 	allowedCORS []string // allowed CORS origins (empty = allow all, for dev/testnet)
+
+	// Discord webhook URL (optional — POSTs agent registration events)
+	webhookURL string
+	webhookMu  stdsync.Mutex
 
 	// Faucet state (testnet only — disabled on mainnet)
 	faucetRequests map[string]*faucetLog // IP → request history
@@ -166,6 +172,103 @@ func (s *Server) SetGovModule(g *governance.Module) {
 // Required for agent registration to automatically register as validators.
 func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
 	s.poiEngine = engine
+}
+
+// SetDiscordWebhook configures a Discord webhook URL for agent registration broadcasts.
+// When set, every new agent registration triggers a POST to this webhook with
+// agent metadata. Pass an empty string to disable.
+func (s *Server) SetDiscordWebhook(url string) {
+	s.webhookMu.Lock()
+	defer s.webhookMu.Unlock()
+	s.webhookURL = url
+}
+
+// notifyDiscord sends an agent registration event to the configured Discord webhook.
+// Runs asynchronously — never blocks the API handler.
+func (s *Server) notifyDiscord(agentID string, caps []core.Capability, blockHeight uint64, tier string, stake core.Amount) {
+	s.webhookMu.Lock()
+	url := s.webhookURL
+	s.webhookMu.Unlock()
+
+	if url == "" {
+		return
+	}
+
+	go func() {
+		capsStr := make([]string, len(caps))
+		for i, c := range caps {
+			capsStr[i] = string(c)
+		}
+
+		payload := map[string]interface{}{
+			"embeds": []map[string]interface{}{
+				{
+					"title":       "🤖 New Agent Registered",
+					"description": "An AI agent just joined Alpha Network.",
+					"color":       0x00F5FF, // electric cyan
+					"timestamp":   time.Now().UTC().Format(time.RFC3339),
+					"fields": []map[string]interface{}{
+						{
+							"name":   "Agent ID",
+							"value":  fmt.Sprintf("`%s`", agentID),
+							"inline": true,
+						},
+						{
+							"name":   "Trust Tier",
+							"value":  tier,
+							"inline": true,
+						},
+						{
+							"name":   "Registration Block",
+							"value":  fmt.Sprintf("#%d", blockHeight),
+							"inline": true,
+						},
+						{
+							"name":   "Capabilities",
+							"value":  strings.Join(capsStr, ", "),
+							"inline": false,
+						},
+						{
+							"name":   "Stake",
+							"value":  fmt.Sprintf("%s $ALPHA", formatStake(int64(stake))),
+							"inline": true,
+						},
+					},
+					"footer": map[string]interface{}{
+						"text": "Alpha Network • Proof of Intelligence",
+					},
+				},
+			},
+		}
+
+		body, _ := json.Marshal(payload)
+		resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+		if err != nil {
+			log.Printf("📡 Discord webhook failed: %v", err)
+			return
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			log.Printf("📡 Discord webhook sent: agent=%s tier=%s block=%d", agentID, tier, blockHeight)
+		} else {
+			log.Printf("📡 Discord webhook rejected: HTTP %d", resp.StatusCode)
+		}
+	}()
+}
+
+// formatStake returns a human-readable stake amount.
+func formatStake(n int64) string {
+	if n >= 1_000_000_000 {
+		return fmt.Sprintf("%.2fB", float64(n)/1e9)
+	}
+	if n >= 1_000_000 {
+		return fmt.Sprintf("%.2fM", float64(n)/1e6)
+	}
+	if n >= 1_000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1e3)
+	}
+	return fmt.Sprintf("%d", n)
 }
 
 // maxBodyBytes is the maximum request body size (1MB).
@@ -287,6 +390,8 @@ func (s *Server) routes() {
 
 	// Faucet (testnet $ALPHA distribution)
 	s.mux.HandleFunc("/faucet", s.handleFaucetPage)
+	s.mux.HandleFunc("GET /api/v1/faucet", s.handleFaucetPage)
+	s.mux.HandleFunc("GET /api/v1/presale", s.handlePresalePage)
 	s.mux.HandleFunc("POST /api/v1/faucet/send", s.handleFaucetSend)
 	s.mux.HandleFunc("GET /api/v1/faucet/stats", s.handleFaucetStats)
 
@@ -417,6 +522,18 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	if s.producer != nil {
 		s.producer.SetAgentCount(len(s.registry.ListAgents(nil)))
 	}
+
+	// Determine trust tier for the webhook
+	tier := "🟢 Active"
+	switch {
+	case req.Stake >= 100000:
+		tier = "👑 Elite"
+	case req.Stake >= 10000:
+		tier = "✅ Trusted"
+	}
+
+	// Fire Discord webhook (async, non-blocking)
+	s.notifyDiscord(string(identity.AgentID), req.Capabilities, blockHeight, tier, req.Stake)
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"success":         true,
@@ -1897,6 +2014,19 @@ func (s *Server) handleFaucetPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(faucetHTML))
 }
 
+// handlePresalePage serves the presale HTML page from disk.
+func (s *Server) handlePresalePage(w http.ResponseWriter, r *http.Request) {
+	data, err := os.ReadFile("/var/www/alphanetx/presale.html")
+	if err != nil {
+		// Fallback to embedded presale page
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(presaleFallbackHTML))
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
+}
+
 // handleFaucetSend dispenses testnet $ALPHA from the protocol treasury.
 // Rate-limited per IP. No signature required (testnet only).
 func (s *Server) handleFaucetSend(w http.ResponseWriter, r *http.Request) {
@@ -2019,7 +2149,8 @@ func isSameFaucetDay(a, b time.Time) bool {
 	return ya == yb && ma == mb && da == db
 }
 
-// faucetHTML is the faucet page served at GET /faucet.
+// presaleFallbackHTML is used if the disk file is unavailable.
+const presaleFallbackHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Alpha Network Presale</title></head><body style="background:#020408;color:#e8f4f8;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h1 style="color:#00F5FF">$ALPHA Presale</h1><p>Visit <a href="https://alphanetx.xyz/presale" style="color:#00F5FF">alphanetx.xyz/presale</a></p></div></body></html>`
 const faucetHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>

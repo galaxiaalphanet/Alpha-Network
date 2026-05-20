@@ -213,6 +213,12 @@ func main() {
 	// Wire PoI engine into API server (auto-registers agents as validators)
 	server.SetPoiEngine(poiEngine)
 
+	// Discord webhook (optional — broadcasts agent registrations to a Discord channel)
+	if webhookURL := os.Getenv("DISCORD_WEBHOOK_URL"); webhookURL != "" {
+		server.SetDiscordWebhook(webhookURL)
+		log.Printf("📡 Discord webhook configured")
+	}
+
 	// Governance module
 	govModule := governance.NewModule(governance.DefaultConfig(), l, registry)
 	server.SetGovModule(govModule)

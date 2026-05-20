@@ -132,6 +132,12 @@ nav .nav-links a:hover{color:#c0d0e0;background:rgba(0,245,255,0.04)}
 nav .nav-links a.active{color:#00F5FF;border-bottom-color:#00F5FF;background:rgba(0,245,255,0.06)}
 nav .nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;padding:14px 20px}
 nav .nav-right .live-indicator{display:flex;align-items:center;gap:6px;font-size:.72rem;color:#2a6a3a;letter-spacing:.5px;text-transform:uppercase}
+nav .nav-search{display:flex;align-items:center;gap:0;margin:0 8px}
+nav .nav-search input{background:#060a14;border:1px solid rgba(0,245,255,0.15);border-radius:7px 0 0 7px;padding:7px 12px;color:#c0d8f0;font-family:'JetBrains Mono',monospace;font-size:.73rem;width:220px;outline:none;transition:all .15s}
+nav .nav-search input:focus{border-color:#00F5FF;box-shadow:0 0 14px rgba(0,245,255,0.08)}
+nav .nav-search input::placeholder{color:#2a3a4a}
+nav .nav-search button{background:rgba(0,245,255,0.1);border:1px solid rgba(0,245,255,0.15);border-left:none;color:#00F5FF;padding:7px 11px;border-radius:0 7px 7px 0;cursor:pointer;font-size:.85rem;transition:all .15s;display:flex;align-items:center}
+nav .nav-search button:hover{background:rgba(0,245,255,0.18)}
 .live-dot{width:7px;height:7px;background:#00cc66;border-radius:50%;display:inline-block;animation:pulse 2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 4px #00cc66}50%{opacity:.4;box-shadow:0 0 8px #00cc66}}
 
@@ -246,6 +252,8 @@ footer a:hover{color:#4af}
   nav .brand{padding:10px 14px;font-size:.9rem}
   nav .nav-links{order:3;width:100%;overflow-x:auto;gap:0}
   nav .nav-links a{padding:10px 14px;font-size:.75rem;white-space:nowrap}
+  nav .nav-search{order:2;width:calc(100% - 100px);margin:0 6px}
+  nav .nav-search input{width:100%}
   nav .nav-right{margin-left:0;padding:8px 14px;margin-left:auto}
   .container{padding:16px 12px}
   .stat-grid{grid-template-columns:repeat(2,1fr);gap:10px}
@@ -276,10 +284,24 @@ const navHTML = `
     <a href="/tasks" {{if eq .Page "tasks"}}class="active"{{end}}>Tasks</a>
     <a href="/intelligence" {{if eq .Page "intelligence"}}class="active"{{end}}>Intelligence</a>
   </div>
+  <div class="nav-search">
+    <input type="text" id="globalSearch" placeholder="Search block, agent, task…" onkeydown="if(event.key==='Enter')doSearch()" autocomplete="off">
+    <button onclick="doSearch()" aria-label="Search">&#128269;</button>
+  </div>
   <div class="nav-right">
     <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
   </div>
 </nav>
+<script>
+function doSearch(){
+  var v=document.getElementById('globalSearch').value.trim();
+  if(!v)return;
+  if(/^\d+$/.test(v)){window.location.href='/blocks/'+v;return}
+  if(/^alpha1/.test(v)){window.location.href='/agents/'+encodeURIComponent(v);return}
+  if(/^[0-9a-fA-F]{64}$/.test(v)){window.location.href='/blocks?tx='+v;return}
+  window.location.href='/agents/'+encodeURIComponent(v);
+}
+</script>
 `
 
 const footerHTML = `<footer><a href="/">Alpha Network Explorer</a> &mdash; alpha-1 testnet &mdash; <span class="mono">Proof of Intelligence</span></footer>`
