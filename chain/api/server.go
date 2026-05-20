@@ -28,6 +28,7 @@ import (
 	"github.com/alpha-network/alpha/chain/net"
 	"github.com/alpha-network/alpha/chain/p2p"
 	"github.com/alpha-network/alpha/chain/producer"
+	"github.com/alpha-network/alpha/chain/store"
 	"github.com/alpha-network/alpha/chain/sync"
 	"github.com/alpha-network/alpha/chain/tasks"
 )
@@ -50,6 +51,7 @@ type Server struct {
 	p2pNode     *p2p.P2PNode
 	ipfsClient  *ipfs.Client
 	govModule   *governance.Module
+	store       *store.Store // BadgerDB persistent store (for presale, other state)
 	allowedCORS []string // allowed CORS origins (empty = allow all, for dev/testnet)
 
 	// Discord webhook URL (optional — POSTs agent registration events)
@@ -172,6 +174,11 @@ func (s *Server) SetGovModule(g *governance.Module) {
 // Required for agent registration to automatically register as validators.
 func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
 	s.poiEngine = engine
+}
+
+// SetStore attaches the BadgerDB store for presale tracking and other persistent state.
+func (s *Server) SetStore(st *store.Store) {
+	s.store = st
 }
 
 // SetDiscordWebhook configures a Discord webhook URL for agent registration broadcasts.
@@ -392,6 +399,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/faucet", s.handleFaucetPage)
 	s.mux.HandleFunc("GET /api/v1/faucet", s.handleFaucetPage)
 	s.mux.HandleFunc("GET /api/v1/presale", s.handlePresalePage)
+	s.mux.HandleFunc("POST /api/v1/presale/record", s.handlePresaleRecord)
+	s.mux.HandleFunc("GET /api/v1/presale/stats", s.handlePresaleStats)
 	s.mux.HandleFunc("POST /api/v1/faucet/send", s.handleFaucetSend)
 	s.mux.HandleFunc("GET /api/v1/faucet/stats", s.handleFaucetStats)
 
@@ -2025,6 +2034,95 @@ func (s *Server) handlePresalePage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
+}
+
+// ── Presale Contribution Tracking ────────────────────────────────────────────
+
+// POST /api/v1/presale/record
+// Called by the presale page JavaScript after a transaction is confirmed.
+// Body: {"wallet":"...","sol_amount":0.12,"alpha_allocation":6000,"tx_signature":"...","timestamp":"..."}
+func (s *Server) handlePresaleRecord(w http.ResponseWriter, r *http.Request) {
+	limitBody(w, r)
+
+	var req struct {
+		Wallet          string  `json:"wallet"`
+		SolAmount       float64 `json:"sol_amount"`
+		AlphaAllocation int64   `json:"alpha_allocation"`
+		TxSignature     string  `json:"tx_signature"`
+		Timestamp       string  `json:"timestamp"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if req.Wallet == "" || req.SolAmount <= 0 || req.TxSignature == "" {
+		writeError(w, http.StatusBadRequest, "wallet, sol_amount, and tx_signature are required")
+		return
+	}
+
+	// Store in BadgerDB under key presale:{wallet}
+	if s.store != nil {
+		record := map[string]interface{}{
+			"wallet":           req.Wallet,
+			"sol_amount":       req.SolAmount,
+			"alpha_allocation": req.AlphaAllocation,
+			"tx_signature":     req.TxSignature,
+			"timestamp":        req.Timestamp,
+		}
+		recordBytes, _ := json.Marshal(record)
+		key := []byte("presale:" + req.Wallet)
+		if err := s.store.Set(key, recordBytes); err != nil {
+			log.Printf("⚠️  Failed to store presale record for %s: %v", req.Wallet, err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":     "recorded",
+		"allocation": req.AlphaAllocation,
+	})
+}
+
+// GET /api/v1/presale/stats
+// Returns aggregated presale statistics for the live stats bar.
+func (s *Server) handlePresaleStats(w http.ResponseWriter, r *http.Request) {
+	totalSOL := 0.0
+	totalAlpha := int64(0)
+	var contributions []map[string]interface{}
+	participants := 0
+
+	if s.store != nil {
+		records, err := s.store.Scan([]byte("presale:"))
+		if err == nil {
+			for _, raw := range records {
+				var rec map[string]interface{}
+				if json.Unmarshal(raw, &rec) == nil {
+					contributions = append(contributions, rec)
+					if sol, ok := rec["sol_amount"].(float64); ok {
+						totalSOL += sol
+					}
+					if alpha, ok := rec["alpha_allocation"].(float64); ok {
+						totalAlpha += int64(alpha)
+					}
+					participants++
+				}
+			}
+		}
+	}
+
+	pctFilled := 0.0
+	if totalSOL > 0 {
+		pctFilled = (totalSOL / 119.0) * 100
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"total_sol":            totalSOL,
+		"total_participants":   participants,
+		"total_alpha_allocated": totalAlpha,
+		"hard_cap_sol":         119,
+		"percent_filled":       pctFilled,
+		"contributions":        contributions,
+	})
 }
 
 // handleFaucetSend dispenses testnet $ALPHA from the protocol treasury.

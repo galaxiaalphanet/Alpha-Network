@@ -85,6 +85,15 @@ section{padding:80px 0}
 .allocation-bar-wrap{width:120px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
 .allocation-bar{height:100%;border-radius:2px}
 
+/* TIMELINE */
+.timeline{position:relative;padding-left:32px;border-left:2px solid rgba(0,245,255,.12);max-width:600px;margin:0 auto}
+.tl-item{position:relative;padding-bottom:36px}
+.tl-item:last-child{padding-bottom:0}
+.tl-dot{position:absolute;left:-41px;top:4px;width:14px;height:14px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan-glow);border:3px solid var(--bg2);z-index:2}
+.tl-date{font-family:var(--mono);font-size:.68rem;color:var(--cyan);letter-spacing:.08em;margin-bottom:4px;text-transform:uppercase}
+.tl-title{font-size:.92rem;font-weight:700;color:var(--text);margin-bottom:4px}
+.tl-desc{font-size:.78rem;color:var(--text-dim);line-height:1.6}
+
 /* PAYMENT WIDGET */
 .widget{border:1px solid var(--border);border-radius:14px;padding:36px;background:var(--surface);max-width:560px;margin:40px auto 0;position:relative}
 .widget-title{font-family:var(--display);font-size:1.2rem;font-weight:700;margin-bottom:24px;text-align:center}
@@ -156,6 +165,10 @@ footer a:hover{color:var(--cyan)}
   .terms-grid{grid-template-columns:1fr 1fr}
   .widget{padding:24px;margin:32px 16px}
   .allocation-bar-wrap{width:60px}
+  .timeline{padding-left:24px}
+  .tl-dot{left:-33px;width:12px;height:12px}
+  .tl-title{font-size:.82rem}
+  .tl-desc{font-size:.72rem}
   .transparency-card{padding:20px;margin:0 16px}
   .transparency-addr{font-size:.68rem}
   .disclaimers{margin:32px 16px}
@@ -181,6 +194,9 @@ footer a:hover{color:var(--cyan)}
   footer{padding:28px 16px;font-size:.65rem}
   .disclaimers{padding:18px}
   .disclaimers li{font-size:.68rem}
+  .timeline{padding-left:20px}
+  .tl-dot{left:-29px;width:10px;height:10px}
+  .tl-title{font-size:.76rem}
 }
 </style>
 </head>
@@ -351,6 +367,58 @@ footer a:hover{color:var(--cyan)}
   </div>
 </section>
 
+<!-- LAUNCH TIMELINE -->
+<section style="background:var(--bg2)">
+  <div class="container">
+    <p class="section-tag">Timeline</p>
+    <h2 class="section-title">Launch Timeline</h2>
+    <p class="section-body">Every step is publicly announced before it happens. Every transaction is on-chain and verifiable. No step happens without community notification.</p>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">May 23, 2026</div>
+          <div class="tl-title">Presale Opens</div>
+          <div class="tl-desc">Public presale opens at 12:00 UTC. 7 days. 119 SOL hard cap.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">May 30, 2026</div>
+          <div class="tl-title">Presale Closes</div>
+          <div class="tl-desc">Presale ends at 12:00 UTC. All contributions final. No extensions.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">~June 1–2, 2026</div>
+          <div class="tl-title">Solana Mainnet Token Deployed</div>
+          <div class="tl-desc">$ALPHA SPL token deployed to Solana mainnet. Contract address published.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">~June 2–3, 2026</div>
+          <div class="tl-title">DEX Liquidity Pool Live</div>
+          <div class="tl-desc">Liquidity pool deployed on Raydium. 50% of presale funds locked.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">~June 7–10, 2026</div>
+          <div class="tl-title">Mainnet Genesis &amp; Launch</div>
+          <div class="tl-desc">Alpha Network mainnet goes live. $ALPHA tokens delivered to all presale participants.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- TRANSPARENCY -->
 <section style="background:var(--bg2)">
   <div class="container">
@@ -404,8 +472,9 @@ const MIN_SOL = 0.12;
 const MAX_SOL = 2;
 const ALPHA_PER_SOL = 50000;
 const SOL_PRICE_USD = 84;
-const DURATION_DAYS = 7;
-const LAUNCH_DATE = new Date(Date.now() + DURATION_DAYS * 86400000).getTime();
+// Presale: May 23–30, 2026 (7 days). Countdown to start before open, to close during.
+const PRESALE_START = new Date('2026-05-23T12:00:00Z').getTime();
+const PRESALE_END   = new Date('2026-05-30T12:00:00Z').getTime();
 
 // ── State ──
 let totalRaised = 0;
@@ -413,11 +482,19 @@ let participantCount = 0;
 let walletConnected = false;
 let walletPubkey = null;
 
-// ── Live stats auto-update ──
+// ── Live stats from API ──
 function fetchStats() {
-  // In production, this fetches from an API endpoint tracking the treasury
-  // For now, use local state updated by successful sends
-  updateStats();
+  fetch('/api/v1/presale/stats')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      totalRaised = data.total_sol || 0;
+      participantCount = data.total_participants || 0;
+      updateStats();
+    })
+    .catch(function(){
+      // API not reachable — use local state
+      updateStats();
+    });
 }
 fetchStats();
 setInterval(fetchStats, 30000);
@@ -429,14 +506,38 @@ function updateStats() {
   document.getElementById('progress-pct').textContent = pct.toFixed(1) + '% filled';
   document.getElementById('stat-participants').textContent = participantCount;
 
-  var remaining = Math.max(0, LAUNCH_DATE - Date.now());
-  var days = Math.floor(remaining / 86400000);
-  var hours = Math.floor((remaining % 86400000) / 3600000);
-  var mins = Math.floor((remaining % 3600000) / 60000);
-  document.getElementById('stat-time').textContent = days + 'd ' + hours + 'h';
-  document.getElementById('stat-time-sub').textContent = mins + 'm remaining';
+  var now = Date.now();
+  var badge = document.querySelector('.hero-badge');
+  var label = document.getElementById('stat-time');
+  var sub   = document.getElementById('stat-time-sub');
 
-  // Fill bar based on if cap reached
+  if (now < PRESALE_START) {
+    // Before presale — countdown to opening
+    var toStart = Math.max(0, PRESALE_START - now);
+    var ds = Math.floor(toStart / 86400000);
+    var hs = Math.floor((toStart % 86400000) / 3600000);
+    var ms = Math.floor((toStart % 3600000) / 60000);
+    label.textContent = ds + 'd ' + hs + 'h';
+    sub.textContent = ms + 'm until presale opens';
+    if (badge) badge.innerHTML = '\u23F3 Presale Opens May 23';
+
+  } else if (now < PRESALE_END) {
+    // Presale live — countdown to close
+    var remaining = Math.max(0, PRESALE_END - now);
+    var days = Math.floor(remaining / 86400000);
+    var hours = Math.floor((remaining % 86400000) / 3600000);
+    var mins = Math.floor((remaining % 3600000) / 60000);
+    label.textContent = days + 'd ' + hours + 'h';
+    sub.textContent = mins + 'm remaining';
+    if (badge) badge.innerHTML = '\uD83D\uDD25 7 Days Only — Live Now';
+
+  } else {
+    // Presale ended
+    label.textContent = '0d 0h';
+    sub.textContent = 'presale ended';
+    if (badge) badge.innerHTML = '\uD83C\uDFAF Presale Ended — May 30';
+  }
+
   if (totalRaised >= HARD_CAP) {
     document.getElementById('stats-bar').style.opacity = '0.6';
     showCapped();
@@ -567,6 +668,20 @@ async function sendSOL() {
     var txLink = document.getElementById('tx-link');
     txLink.href = 'https://solscan.io/tx/' + signature;
     txLink.textContent = signature;
+
+    // Record contribution on the backend
+    var record = {
+      wallet: walletPubkey,
+      sol_amount: val,
+      alpha_allocation: alpha,
+      tx_signature: signature,
+      timestamp: new Date().toISOString()
+    };
+    fetch('/api/v1/presale/record', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(record)
+    }).catch(function(){});  // fire-and-forget — stats refresh picks it up
 
     // Disable send if cap reached
     if (totalRaised >= HARD_CAP) {
