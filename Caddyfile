@@ -7,21 +7,24 @@ alphanetx.xyz:80 {
 
 	redir /whitepaper.html https://github.com/galaxiaalphanet/Alpha-Network/blob/main/whitepaper/ALPHA_WHITEPAPER.md 301
 
-	handle_path /api/* {
+	handle /api/* {
 		reverse_proxy localhost:8080 {
 			header_down Cache-Control "no-cache, no-store, must-revalidate"
 		}
 	}
-	handle_path /ws* {
+	handle /ws* {
 		reverse_proxy localhost:8081
 	}
-	handle_path /health* {
+	handle /health* {
 		reverse_proxy localhost:8080
 	}
-	handle_path /faucet* {
+	handle /faucet* {
 		reverse_proxy localhost:8080
 	}
-	handle_path /explorer* {
+
+	rewrite /presale /presale.html
+
+	handle /explorer* {
 		reverse_proxy localhost:8082 {
 			header_down Cache-Control "no-cache, no-store, must-revalidate"
 			header_down Pragma "no-cache"
