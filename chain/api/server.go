@@ -401,6 +401,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/presale", s.handlePresalePage)
 	s.mux.HandleFunc("POST /api/v1/presale/record", s.handlePresaleRecord)
 	s.mux.HandleFunc("GET /api/v1/presale/stats", s.handlePresaleStats)
+	s.mux.HandleFunc("GET /api/v1/presale/verify", s.handlePresaleVerify)
 	s.mux.HandleFunc("POST /api/v1/faucet/send", s.handleFaucetSend)
 	s.mux.HandleFunc("GET /api/v1/faucet/stats", s.handleFaucetStats)
 
@@ -2125,6 +2126,41 @@ func (s *Server) handlePresaleStats(w http.ResponseWriter, r *http.Request) {
 		"percent_filled":       pctFilled,
 		"contributions":        contributions,
 	})
+}
+
+// GET /api/v1/presale/verify?wallet=SOL_ADDRESS
+// Lets a contributor verify their allocation is recorded.
+func (s *Server) handlePresaleVerify(w http.ResponseWriter, r *http.Request) {
+	wallet := strings.TrimSpace(r.URL.Query().Get("wallet"))
+	if wallet == "" {
+		writeError(w, http.StatusBadRequest, "wallet query parameter required")
+		return
+	}
+
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not available")
+		return
+	}
+
+	key := []byte("presale:" + wallet)
+	recordBytes, err := s.store.Get(key)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"wallet": wallet,
+			"status": "not_found",
+			"message": "No contribution found for this wallet. If you just sent SOL, wait 30 seconds and try again.",
+		})
+		return
+	}
+
+	var rec map[string]interface{}
+	if err := json.Unmarshal(recordBytes, &rec); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to decode record")
+		return
+	}
+
+	rec["status"] = "confirmed"
+	writeJSON(w, http.StatusOK, rec)
 }
 
 // handleFaucetSend dispenses testnet $ALPHA from the protocol treasury.
