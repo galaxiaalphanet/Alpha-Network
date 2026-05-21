@@ -209,6 +209,7 @@ footer a:hover{color:var(--cyan)}
     <li><a href="/explorer">Explorer</a></li>
     <li><a href="/faucet">Faucet</a></li>
     <li><a href="/presale" style="color:var(--cyan)!important">Presale</a></li>
+    <li><a href="https://x.com/alphanet_xyz" target="_blank" title="X / Twitter" style="display:flex;align-items:center"><svg width="17" height="17" viewBox="0 0 24 24" fill="#00F5FF" style="vertical-align:middle"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a></li>
     <li><a href="https://discord.gg/CxQb3mZSHc" target="_blank" title="Discord"><svg width="17" height="17" viewBox="0 0 24 24" fill="#00F5FF"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg></a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menu" onclick="document.getElementById('nav-links').classList.toggle('open');this.classList.toggle('open')">
@@ -243,8 +244,8 @@ footer a:hover{color:var(--cyan)}
     </div>
     <div class="stat-item">
       <span class="stat-label">SOL Price</span>
-      <span class="stat-value">$84</span>
-      <span class="stat-sub">current</span>
+      <span class="stat-value" id="stat-price">—</span>
+      <span class="stat-sub">1 SOL = loading...</span>
     </div>
   </div>
   <div class="progress-wrap">
@@ -428,6 +429,7 @@ footer a:hover{color:var(--cyan)}
     <div class="transparency-card">
       <div style="font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em">Treasury Address</div>
       <div class="transparency-addr">BypHj4Y4f9J5ajAu28gJZFJCR1cLr3CTU8E86THMK1bi</div>
+      <div style="font-size:.62rem;color:#3a4a5a;margin-top:-8px;margin-bottom:12px">Account activates on first contribution — this is normal for new Solana wallets.</div>
       <div style="font-size:.75rem;color:var(--text-dim);margin-bottom:8px">All contributions publicly verifiable on Solana explorer.</div>
       <div style="font-size:.72rem;color:var(--cyan)">No team allocation. No VC. No insider rounds.</div>
       <div class="transparency-links">
@@ -451,6 +453,7 @@ footer a:hover{color:var(--cyan)}
         <li>Token value depends entirely on network adoption and usage. There is no promise of price appreciation.</li>
         <li>Tokens are locked until mainnet launch. No early transfers or trading before the network goes live.</li>
         <li>The development team receives no allocation from this presale round.</li>
+        <li>Presale $ALPHA tokens are delivered at mainnet launch (~June 7–10). DEX trading begins ~June 2–3 before token delivery. Market price at delivery may differ from presale price. This is a utility token purchase, not an investment.</li>
         <li>By sending SOL, you acknowledge you have read and understood these terms.</li>
       </ul>
     </div>
@@ -460,8 +463,9 @@ footer a:hover{color:var(--cyan)}
 <footer>
   <div>Built by anonymous contributors · MIT License · No pre-mine · No VC · No founders</div>
   <div style="display:flex;gap:24px;flex-wrap:wrap">
-    <a href="/">Home</a><a href="/explorer">Explorer</a><a href="/faucet">Faucet</a><a href="https://github.com/galaxiaalphanet/Alpha-Network">GitHub</a><a href="https://discord.gg/CxQb3mZSHc">Discord</a>
+    <a href="/">Home</a><a href="/explorer">Explorer</a><a href="/faucet">Faucet</a><a href="https://github.com/galaxiaalphanet/Alpha-Network">GitHub</a><a href="https://x.com/alphanet_xyz" target="_blank">X</a><a href="https://discord.gg/CxQb3mZSHc">Discord</a>
   </div>
+  <div style="margin-top:12px;font-size:.65rem;color:#2a3a4a">Powered by Solana · alphanetx.xyz</div>
 </footer>
 
 <script>
@@ -471,10 +475,29 @@ const HARD_CAP = 119;
 const MIN_SOL = 0.12;
 const MAX_SOL = 2;
 const ALPHA_PER_SOL = 50000;
-const SOL_PRICE_USD = 84;
+// Live SOL price — fetched from CoinGecko every 60s
+let solPrice = 0;
 // Presale: May 23–30, 2026 (7 days). Countdown to start before open, to close during.
 const PRESALE_START = new Date('2026-05-23T12:00:00Z').getTime();
 const PRESALE_END   = new Date('2026-05-30T12:00:00Z').getTime();
+
+// ── Live SOL price from CoinGecko ──
+function fetchSolPrice() {
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.solana?.usd) {
+        solPrice = d.solana.usd;
+        document.getElementById('stat-price').textContent = '$' + solPrice.toFixed(2);
+        var subEl = document.querySelector('.stat-item:nth-child(4) .stat-sub');
+        if(subEl) subEl.textContent = '1 SOL = $' + solPrice.toFixed(2);
+        updateCalculator();
+      }
+    })
+    .catch(function(){});  // silent fail — keeps last known price
+}
+fetchSolPrice();
+setInterval(fetchSolPrice, 60000);
 
 // ── State ──
 let totalRaised = 0;

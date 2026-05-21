@@ -285,23 +285,15 @@ const navHTML = `
     <a href="/intelligence" {{if eq .Page "intelligence"}}class="active"{{end}}>Intelligence</a>
   </div>
   <div class="nav-search">
-    <input type="text" id="globalSearch" placeholder="Search block, agent, task…" onkeydown="if(event.key==='Enter')doSearch()" autocomplete="off">
-    <button onclick="doSearch()" aria-label="Search">&#128269;</button>
+    <form action="/search" method="GET" style="display:flex;align-items:center;gap:0">
+    <input type="text" id="globalSearch" name="q" placeholder="Search block, agent, task…" autocomplete="off">
+    <button type="submit" aria-label="Search">&#128269;</button>
+    </form>
   </div>
   <div class="nav-right">
     <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
   </div>
 </nav>
-<script>
-function doSearch(){
-  var v=document.getElementById('globalSearch').value.trim();
-  if(!v)return;
-  if(/^\d+$/.test(v)){window.location.href='/blocks/'+v;return}
-  if(/^alpha1/.test(v)){window.location.href='/agents/'+encodeURIComponent(v);return}
-  if(/^[0-9a-fA-F]{64}$/.test(v)){window.location.href='/blocks?tx='+v;return}
-  window.location.href='/agents/'+encodeURIComponent(v);
-}
-</script>
 `
 
 const footerHTML = `<footer><a href="/">Alpha Network Explorer</a> &mdash; alpha-1 testnet &mdash; <span class="mono">Proof of Intelligence</span></footer>`
@@ -1636,6 +1628,47 @@ func handleIntelligence(w http.ResponseWriter, r *http.Request) {
 	renderTmpl(w, intelligenceTmpl, d)
 }
 
+// ─── Universal Search ────────────────────────────────────────────────────────
+
+// GET /search?q=... — auto-detects input type and redirects
+func handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	// Integer → block height
+	if _, err := strconv.ParseInt(q, 10, 64); err == nil {
+		http.Redirect(w, r, "/blocks/"+q, http.StatusFound)
+		return
+	}
+
+	// Bech32 agent address (alpha1 prefix)
+	if strings.HasPrefix(q, "alpha1") {
+		http.Redirect(w, r, "/agents/"+q, http.StatusFound)
+		return
+	}
+
+	// 64-char hex → transaction hash
+	if len(q) == 64 {
+		hexOnly := true
+		for _, c := range q {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				hexOnly = false
+				break
+			}
+		}
+		if hexOnly {
+			http.Redirect(w, r, "/blocks?tx="+q, http.StatusFound)
+			return
+		}
+	}
+
+	// Fallback → try as agent ID / task ID
+	http.Redirect(w, r, "/agents/"+q, http.StatusFound)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
@@ -1648,6 +1681,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Pages
+	mux.HandleFunc("/search", handleSearch)
 	mux.HandleFunc("/", handleDashboard)
 	mux.HandleFunc("/blocks", handleBlocksList)
 	mux.HandleFunc("/blocks/", handleBlockDetail)
