@@ -236,6 +236,22 @@ func (r *Registry) ListAgents(capability *core.Capability) []*core.AgentIdentity
 	return result
 }
 
+// CountByAddress returns how many agents are already registered under the given address.
+// Used for per-address Sybil protection — exponential stake escalates per wallet,
+// not network-wide. A new wallet always starts at agent count 1.
+func (r *Registry) CountByAddress(addr core.Address) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, agent := range r.agents {
+		if agent.Address == addr {
+			count++
+		}
+	}
+	return count
+}
+
 // UpdateReputation adjusts an agent's reputation score with bounds
 func (r *Registry) UpdateReputation(agentID core.AgentID, delta core.ReputationScore) error {
 	r.mu.Lock()

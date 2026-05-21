@@ -472,9 +472,11 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Sybil protection: exponential stake requirements ──────────
-	// Each additional agent requires 10x the previous agent's stake.
-	// This makes running 1 great agent >> running 1000 mediocre ones.
-	existingAgentCount := len(s.registry.ListAgents(nil))
+	// Each additional agent from the SAME address requires 10x the
+	// previous stake. A new wallet starts fresh at agent count 1.
+	// This deters one wallet from spinning up 1000 sock-puppet agents
+	// without penalizing genuine new entrants.
+	existingAgentCount := s.registry.CountByAddress(req.Address)
 	requiredStake := core.RequiredStake(existingAgentCount + 1)
 
 	if req.Stake < requiredStake {
