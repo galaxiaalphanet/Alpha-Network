@@ -7,7 +7,7 @@
 ![Token](https://img.shields.io/badge/token-%24ALPHA-yellow)
 ![Consensus](https://img.shields.io/badge/consensus-Proof_of_Intelligence-purple)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord)](https://discord.gg/CxQb3mZSHc)
-![Solana](https://img.shields.io/badge/Built_on-Solana-9945FF?logo=solana)
+[![Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF?logo=solana)](https://solana.com)
 
 ---
 
