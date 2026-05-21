@@ -1,6 +1,6 @@
 #!/bin/bash
 # P2P Stress Test — Run 3 Alpha Network nodes locally and verify consensus
-# Duration: 24 hours
+# Duration: 7 days (168 hours)
 # Monitors: block height agreement, divergence detection, uptime
 #
 # Health check via LOG FILE PARSING (not HTTP polling).
@@ -24,7 +24,7 @@ if [ -f "$LOCKFILE" ]; then
 fi
 echo $$ > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
-DURATION_HOURS=24
+DURATION_HOURS=168  # 7 days
 START_TIME=$(date +%s)
 END_TIME=$((START_TIME + DURATION_HOURS * 3600))
 
@@ -59,7 +59,7 @@ cleanup() {
 trap cleanup INT TERM
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║     Alpha Network — P2P Consensus Stress Test (24h)          ║"
+echo "║     Alpha Network — P2P Consensus Stress Test (7-Day)       ║"
 echo "║     3 nodes | PoI consensus | Log-based monitoring           ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
@@ -238,7 +238,7 @@ echo "📝 Total iterations: $ITERATION"
 echo ""
 
 if [ $DIVERGENCE_COUNT -eq 0 ]; then
-    echo "✅ PASSED — Zero consensus divergences in 24 hours"
+    echo "✅ PASSED — Zero consensus divergences in 7 days"
 else
     echo "❌ FAILED — $DIVERGENCE_COUNT divergence events detected"
 fi
