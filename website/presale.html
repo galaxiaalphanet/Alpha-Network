@@ -563,15 +563,13 @@ function showError(msg) {
 async function connectWallet() {
   if (walletConnected) return;
 
-  try {
-    var provider = window.phantom?.solana;
-    if (!provider || !provider.isPhantom) {
-      showError('Phantom wallet not detected. Please install from phantom.app');
-      window.open('https://phantom.app', '_blank');
-      return;
-    }
+  if (!window.solana?.isPhantom) {
+    window.open('https://phantom.app', '_blank');
+    return;
+  }
 
-    var resp = await provider.connect();
+  try {
+    var resp = await window.solana.connect();
     walletPubkey = resp.publicKey.toString();
     walletConnected = true;
 
@@ -608,7 +606,7 @@ async function connectWallet() {
 
 // Auto-detect Phantom
 window.addEventListener('load', function() {
-  if (window.phantom?.solana?.isPhantom) {
+  if (window.solana?.isPhantom) {
     // Don't auto-connect, just show ready state
   }
 });
@@ -638,7 +636,7 @@ async function sendSOL() {
     return;
   }
 
-  var provider = window.phantom?.solana;
+  var provider = window.solana;
   if (!provider || !walletConnected) {
     showError('Wallet not connected. Click "Connect Phantom Wallet" first.');
     return;
