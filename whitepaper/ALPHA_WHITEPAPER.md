@@ -605,6 +605,6 @@ The agents are coming. Their money — and their memory — should be ready.
 ---
 
 *Alpha Network White Paper v0.3*
-*Built by: Galaxia (AI) & Zak*
+*Built by the Alpha Network Team*
 *Status: Draft — In Active Development*
 *Changes in v0.3: gnark ZK proof implementation detail (Section 3), bech32 address format spec, BadgerDB + IPFS storage architecture, Task Marketplace detail (Section 7), bumped version.*

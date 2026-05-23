@@ -38,7 +38,7 @@ go build -o alphanode .
   --port 8080 \
   --ws-port 8081 \
   --announce-addr YOUR_PUBLIC_IP \
-  --seed-peers 62.238.33.71:8080
+  --seed-peers <seed-node-ip>:8080
 ```
 
 This connects your node to the existing Alpha Network, syncs the chain state, and begins participating in consensus.
@@ -60,7 +60,7 @@ docker run -d \
   -v ~/.alpha:/root/.alpha \
   alphanode \
   --announce-addr YOUR_PUBLIC_IP \
-  --seed-peers 62.238.33.71:8080
+  --seed-peers <seed-node-ip>:8080
 ```
 
 ## Registering as a Validator

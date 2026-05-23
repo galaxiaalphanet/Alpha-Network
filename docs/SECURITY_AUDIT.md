@@ -1,5 +1,5 @@
 # Alpha Network Security Audit — Self-Assessment
-> Date: 2026-05-18 | Scope: v0.3.1 | Auditor: Galaxia (internal)
+> Date: 2026-05-18 | Scope: v0.3.1 | Auditor: Alpha Network Team
 > Status: **4/4 CRITICAL FIXES APPLIED & VERIFIED** ✅
 > Files reviewed: `consensus/poi.go`, `ledger/ledger.go`, `api/server.go`
 
