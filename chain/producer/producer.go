@@ -32,7 +32,7 @@ const (
 	blockInterval    = 500 * time.Millisecond
 	mempoolCap       = 10_000
 	rewardAddr       = core.Address("alpha1_protocol_treasury")
-	operatorAddr     = core.Address("alpha19m8uguks3xnvynzt58vp4ugj6acvzncax23799") // Zak — 10% operator share
+	operatorAddr     = core.Address("alpha19m8uguks3xnvynzt58vp4ugj6acvzncax23799") // Operator — 10% operator share
 	operatorShare    = core.Amount(10) // 10% to node operator
 	statsLogInterval = 10 * time.Second
 )

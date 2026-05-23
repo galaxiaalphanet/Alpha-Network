@@ -66,3 +66,11 @@ SOUL.md
 memory/
 BUILD_REPORT.md
 docs/SECURITY_AUDIT.md
+*.operator.md
+*.private.md
+*.key
+*.pem
+*.secret
+secrets/
+private/
+internal/
