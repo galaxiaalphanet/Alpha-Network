@@ -60,3 +60,7 @@ sdk/typescript/examples/*.d.ts
 sdk/typescript/examples/*.js.map
 sdk/typescript/examples/*.d.ts.map
 sdk/typescript/node_modules/
+GALAXIA.md
+MEMORY.md
+SOUL.md
+memory/
