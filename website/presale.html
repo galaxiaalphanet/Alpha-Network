@@ -656,7 +656,7 @@ async function connectWallet() {
 
     // Get balance
     try {
-      var connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+      var connection = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed', fetch: window.fetch.bind(window) });
       var pk = new solanaWeb3.PublicKey(walletPubkey);
       var bal = await connection.getBalance(pk);
       document.getElementById('wallet-balance').textContent = (bal / 1e9).toFixed(4) + ' SOL';
@@ -678,10 +678,21 @@ async function connectWallet() {
   }
 }
 
-// Auto-detect Phantom
-window.addEventListener('load', function() {
+// Auto-detect Phantom — reconnect silently if already approved
+window.addEventListener('load', async function() {
   if (window.solana?.isPhantom) {
-    // Don't auto-connect, just show ready state
+    try {
+      var resp = await window.solana.connect({ onlyIfTrusted: true });
+      walletPubkey = resp.publicKey.toString();
+      walletConnected = true;
+      document.getElementById('wallet-addr').textContent = walletPubkey.slice(0,6) + '...' + walletPubkey.slice(-4);
+      document.getElementById('wallet-info').style.display = 'block';
+      var btn = document.getElementById('wallet-btn');
+      btn.textContent = '✅ Wallet Connected';
+      btn.classList.add('connected');
+      btn.onclick = null;
+      updateCalculator();
+    } catch(e) { /* not previously approved, user must click manually */ }
   }
 });
 
@@ -717,15 +728,31 @@ async function sendSOL() {
   }
 
   try {
+    var connection = new solanaWeb3.Connection(
+      'https://solana-rpc.publicnode.com',
+      { commitment: 'confirmed', fetch: window.fetch.bind(window) }
+    );
+    var fromPubkey = new solanaWeb3.PublicKey(walletPubkey);
+    var toPubkey = new solanaWeb3.PublicKey(TREASURY);
+
     var transaction = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({
-        fromPubkey: new solanaWeb3.PublicKey(walletPubkey),
-        toPubkey: new solanaWeb3.PublicKey(TREASURY),
+        fromPubkey: fromPubkey,
+        toPubkey: toPubkey,
         lamports: Math.floor(val * 1e9)
       })
     );
 
-    var { signature } = await provider.signAndSendTransaction(transaction);
+    var { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = fromPubkey;
+
+    var signed = await provider.signTransaction(transaction);
+    var signature = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed'
+    });
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
     var alpha = Math.floor(val * ALPHA_PER_SOL);
 
     // Update local state
