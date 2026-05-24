@@ -114,6 +114,15 @@ section{padding:80px 0}
 .send-btn{width:100%;margin-top:20px;padding:16px;background:var(--cyan);color:#000;font-family:var(--mono);font-weight:800;font-size:.85rem;border:none;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:box-shadow .2s,transform .15s}
 .send-btn:hover:not(:disabled){box-shadow:0 0 30px var(--cyan-glow),0 0 60px rgba(0,245,255,.2);transform:translateY(-1px)}
 .send-btn:disabled{background:rgba(255,255,255,.08);color:var(--text-dim);cursor:not-allowed}
+.promo-wrap{margin:12px 0 0;display:flex;gap:8px}
+.promo-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 14px;color:#fff;font-family:var(--mono);font-size:.78rem;outline:none}
+.promo-input:focus{border-color:var(--cyan)}
+.promo-btn{background:transparent;border:1px solid var(--cyan);color:var(--cyan);font-family:var(--mono);font-size:.75rem;font-weight:700;padding:10px 16px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.promo-btn:hover{background:rgba(0,245,255,.08)}
+.promo-success{margin:10px 0 0;padding:10px 14px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);border-radius:8px;color:#00ff88;font-size:.78rem;font-family:var(--mono);display:none}
+.promo-success.show{display:block}
+.promo-error{margin:10px 0 0;padding:10px 14px;background:rgba(255,60,60,.1);border:1px solid rgba(255,60,60,.3);border-radius:8px;color:#ff6b6b;font-size:.78rem;font-family:var(--mono);display:none}
+.promo-error.show{display:block}
 .confirmation{padding:20px;border:1px solid rgba(0,255,136,.25);border-radius:8px;background:rgba(0,255,136,.04);margin-top:20px;text-align:center;display:none}
 .confirmation.show{display:block}
 .confirmation .tx-link{color:var(--cyan);word-break:break-all;font-size:.72rem}
@@ -304,6 +313,12 @@ footer a:hover{color:var(--cyan)}
         <div class="label">You will receive</div>
         <div class="amount" id="calc-amount">0 $ALPHA</div>
       </div>
+      <div class="promo-wrap">
+        <input class="promo-input" id="promo-input" type="text" placeholder="Promo code (optional)" maxlength="20">
+        <button class="promo-btn" onclick="applyPromo()">Apply</button>
+      </div>
+      <div class="promo-success" id="promo-success">🎉 Product Hunt bonus: +10,000 $ALPHA added to your allocation automatically.</div>
+      <div class="promo-error" id="promo-error">Invalid or expired promo code.</div>
       <button class="send-btn" id="send-btn" disabled onclick="sendSOL()">Send SOL</button>
       <div class="error-box" id="error-box"></div>
       <div class="confirmation" id="confirmation">
@@ -633,6 +648,47 @@ function showError(msg) {
   setTimeout(function() { box.classList.remove('show'); }, 6000);
 }
 
+// ── Promo code ──
+const PROMO_CODE = 'PRODUCTHUNT';
+const PROMO_BONUS = 10000;
+const PROMO_EXPIRY = new Date('2026-05-30T23:59:59Z');
+var promoActive = false;
+
+function applyPromo() {
+  var val = document.getElementById('promo-input').value.trim().toUpperCase();
+  var successEl = document.getElementById('promo-success');
+  var errorEl = document.getElementById('promo-error');
+  errorEl.classList.remove('show');
+  successEl.classList.remove('show');
+  if (val === PROMO_CODE && new Date() < PROMO_EXPIRY) {
+    promoActive = true;
+    successEl.classList.add('show');
+    document.getElementById('promo-input').disabled = true;
+  } else if (new Date() >= PROMO_EXPIRY) {
+    errorEl.textContent = 'This promo code has expired.';
+    errorEl.classList.add('show');
+  } else {
+    errorEl.textContent = 'Invalid or expired promo code.';
+    errorEl.classList.add('show');
+  }
+  updateCalculator();
+}
+
+function checkUrlPromo() {
+  var params = new URLSearchParams(window.location.search);
+  var ref = params.get('ref') || '';
+  if (ref.toLowerCase() === 'producthunt' && new Date() < PROMO_EXPIRY) {
+    promoActive = true;
+    var successEl = document.getElementById('promo-success');
+    if (successEl) {
+      successEl.classList.add('show');
+      var inp = document.getElementById('promo-input');
+      if (inp) { inp.value = PROMO_CODE; inp.disabled = true; }
+    }
+    updateCalculator();
+  }
+}
+
 // ── Wallet connect (Phantom) ──
 async function connectWallet() {
   if (walletConnected) return;
@@ -680,6 +736,7 @@ async function connectWallet() {
 
 // Auto-detect Phantom — reconnect silently if already approved
 window.addEventListener('load', async function() {
+  checkUrlPromo();
   if (window.solana?.isPhantom) {
     try {
       var resp = await window.solana.connect({ onlyIfTrusted: true });
@@ -700,7 +757,7 @@ window.addEventListener('load', async function() {
 function updateCalculator() {
   var input = document.getElementById('sol-amount');
   var val = parseFloat(input.value) || 0;
-  var alpha = Math.floor(val * ALPHA_PER_SOL);
+  var alpha = Math.floor(val * ALPHA_PER_SOL) + (promoActive ? PROMO_BONUS : 0);
   document.getElementById('calc-amount').textContent = alpha.toLocaleString() + ' $ALPHA';
 
   var sendBtn = document.getElementById('send-btn');
