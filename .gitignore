@@ -27,6 +27,9 @@ sdk/typescript/node_modules/
 .env
 .env.*
 
+# Discord bot runtime state (never overwrite on pull)
+discord-bot/milestone-state.json
+
 # Build artifacts
 /build/
 /dist/
