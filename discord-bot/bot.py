@@ -70,13 +70,20 @@ def presale_countdown(state: dict):
     if remaining.total_seconds() <= 0:
         return  # presale ended
 
-    if state["last_countdown"]:
-        last = datetime.fromisoformat(state["last_countdown"])
-        if (now - last).total_seconds() < 12 * 3600:
-            return
+    if state.get("last_countdown"):
+        try:
+            last = datetime.fromisoformat(state["last_countdown"])
+            if (now - last).total_seconds() < 12 * 3600:
+                return
+        except (ValueError, TypeError):
+            pass  # corrupted timestamp, re-post
 
     days, secs = remaining.days, remaining.seconds
     hours = secs // 3600
+
+    # Save state BEFORE posting — prevents duplicate posts if Discord fails
+    state["last_countdown"] = now.isoformat()
+    save_state(state)
 
     msg = (
         f"⏳ **$ALPHA Presale Countdown**\n\n"
@@ -89,9 +96,9 @@ def presale_countdown(state: dict):
     )
 
     if send_message(msg):
-        state["last_countdown"] = now.isoformat()
-        save_state(state)
         print(f"[presale] Posted countdown — {days}d {hours}h remaining")
+    else:
+        print(f"[presale] Discord send failed (state already saved)", file=sys.stderr)
 
 # ── Task 2: Block Milestones ─────────────────────────────────────────────────
 
@@ -105,7 +112,7 @@ def block_milestones(state: dict):
         print(f"[milestone] health fetch failed: {e}", file=sys.stderr)
         return
 
-    last = state["last_milestone"]
+    last = state.get("last_milestone", 0)
 
     # On first run, seed from current height
     if last == 0:
@@ -119,6 +126,10 @@ def block_milestones(state: dict):
     if height < next_ms:
         return
 
+    # Save state BEFORE posting — prevents duplicate posts if Discord fails
+    state["last_milestone"] = next_ms
+    save_state(state)
+
     msg = (
         f"🧱 **Block Milestone!**\n\n"
         f"Alpha Network just crossed **{next_ms:,} blocks** 🎉\n"
@@ -128,9 +139,9 @@ def block_milestones(state: dict):
     )
 
     if send_message(msg):
-        state["last_milestone"] = next_ms
-        save_state(state)
         print(f"[milestone] Posted {next_ms:,} blocks")
+    else:
+        print(f"[milestone] Discord send failed (state already saved)", file=sys.stderr)
 
 # ── Task 3: Daily Stats ──────────────────────────────────────────────────────
 
@@ -141,7 +152,7 @@ def daily_stats(state: dict):
         return
 
     today = now.strftime("%Y-%m-%d")
-    if state["last_daily"] == today:
+    if state.get("last_daily") == today:
         return
 
     try:
@@ -159,6 +170,10 @@ def daily_stats(state: dict):
     bps = c.get("blocks_per_sec", 0)
     uptime = c.get("uptime", "N/A")
 
+    # Save state BEFORE posting — prevents duplicate posts if Discord rate-limits us
+    state["last_daily"] = today
+    save_state(state)
+
     msg = (
         f"📊 **Alpha Network Daily Stats** — {today}\n\n"
         f"🧱 Height: **{height:,}**\n"
@@ -172,9 +187,9 @@ def daily_stats(state: dict):
     )
 
     if send_message(msg):
-        state["last_daily"] = today
-        save_state(state)
         print(f"[daily] Posted stats for {today}")
+    else:
+        print(f"[daily] Discord send failed (state already saved for {today})", file=sys.stderr)
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 
@@ -186,12 +201,16 @@ def main():
     while True:
         try:
             presale_countdown(state)
+            time.sleep(2)  # ⸻ avoid Discord rate limiting
+
             block_milestones(state)
+            time.sleep(2)
+
             daily_stats(state)
         except Exception as e:
             print(f"[alpha-bot] loop error: {e}", file=sys.stderr)
 
-        time.sleep(60)  # check every 60 seconds
+        time.sleep(56)  # total loop ~60s
 
 
 if __name__ == "__main__":
