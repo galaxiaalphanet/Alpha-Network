@@ -28,10 +28,12 @@ TOKEN_SYMBOL="ALPHA"
 TOKEN_DECIMALS=8
 TOTAL_SUPPLY=1000000000  # 1 billion (in base units = 1e8 per token)
 MINT_AUTHORITY=""        # Set to your wallet pubkey. Leave empty to disable future minting.
-DEPLOY_WALLET=""         # Path to Solana keypair file OR set to empty for default wallet
+DEPLOY_WALLET="/root/.config/solana/alpha-deploy.json"
+METADATA_URI=""            # Fill in after Pinata upload (Arweave/IPFS URI)
+TREASURY_WALLET="BypHj4Y4f9J5ajAu28gJZFJCR1cLr3CTU8E86THMK1bi"
 
 NETWORK="mainnet-beta"
-RPC_URL="https://api.mainnet-beta.solana.com"
+RPC_URL="https://solana-rpc.publicnode.com"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -175,20 +177,27 @@ spl-token mint "$TOKEN_MINT" "$TOTAL_SUPPLY"
 echo -e "   ${GRN}✅ Minted $TOTAL_SUPPLY $TOKEN_SYMBOL${NC}"
 echo ""
 
-# ── Step 4: Disable Future Minting (fixed supply) ─────────────────────────────
+# ── Step 4: Transfer to Treasury ─────────────────────────────────────────────
+echo -e "${CYN}━━━ Step 4: Transfer Full Supply to Treasury ━━━${NC}"
+# Create treasury token account if it doesn't exist, then transfer all tokens
+spl-token transfer "$TOKEN_MINT" "$TOTAL_SUPPLY" "$TREASURY_WALLET" --fund-recipient
+echo -e "   ${GRN}✅ Transferred $TOTAL_SUPPLY $TOKEN_SYMBOL to treasury:${NC} $TREASURY_WALLET"
+echo ""
+
+# ── Step 5: Disable Future Minting (fixed supply) ─────────────────────────────
 if [ -z "$MINT_AUTHORITY" ]; then
-    echo -e "${CYN}━━━ Step 4: Lock Supply (disable mint authority) ━━━${NC}"
+    echo -e "${CYN}━━━ Step 5: Lock Supply (disable mint authority) ━━━${NC}"
     spl-token authorize "$TOKEN_MINT" mint --disable
     echo -e "   ${GRN}✅ Mint authority disabled — supply is permanently fixed${NC}"
 else
-    echo -e "${CYN}━━━ Step 4: Set Mint Authority ━━━${NC}"
+    echo -e "${CYN}━━━ Step 5: Set Mint Authority ━━━${NC}"
     spl-token authorize "$TOKEN_MINT" mint "$MINT_AUTHORITY"
     echo -e "   ${GRN}✅ Mint authority set to:${NC} $MINT_AUTHORITY"
 fi
 echo ""
 
-# ── Step 5: Verify ────────────────────────────────────────────────────────────
-echo -e "${CYN}━━━ Step 5: Verify Deployment ━━━${NC}"
+# ── Step 6: Verify ────────────────────────────────────────────────────────────
+echo -e "${CYN}━━━ Step 6: Verify Deployment ━━━${NC}"
 TOKEN_SUPPLY=$(spl-token supply "$TOKEN_MINT" 2>&1 | awk '{print $NF}')
 TOKEN_INFO=$(spl-token account-info "$TOKEN_MINT" 2>&1)
 echo "   Token Mint:    $TOKEN_MINT"
@@ -196,6 +205,18 @@ echo "   Token Account: $TOKEN_ACCOUNT"
 echo "   Total Supply:  $TOKEN_SUPPLY"
 echo ""
 echo -e "${GRN}✅ \$ALPHA deployed to Solana mainnet${NC}"
+echo ""
+
+# ── Step 7: Set Metadata URI ──────────────────────────────────────────────────
+echo -e "${CYN}━━━ Step 7: Token Metadata ━━━${NC}"
+if [ -n "$METADATA_URI" ]; then
+    echo "   Metadata URI: $METADATA_URI"
+    echo "   ⚠️  Run metaboss (or Metaplex SDK) to set on-chain metadata:"
+    echo "   metaboss create metadata --mint $TOKEN_MINT --uri \"$METADATA_URI\""
+else
+    echo -e "   ${YLW}⚠️  METADATA_URI not set — metadata will NOT be attached${NC}"
+    echo "   Set METADATA_URI at top of script after Pinata upload, then re-run"
+fi
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────────────────────
@@ -212,11 +233,16 @@ echo ""
 echo "   🔗 Solscan:   https://solscan.io/token/$TOKEN_MINT"
 echo "   🔗 Explorer:  https://explorer.solana.com/address/$TOKEN_MINT"
 echo ""
+echo "   Treasury:      $TREASURY_WALLET"
+echo "   Metadata URI:  ${METADATA_URI:-<not set — upload to Pinata first>}"
+echo ""
 echo "   Next steps:"
 echo "   1. Verify on Solscan that the token appears correctly"
-echo "   2. Add token to Phantom wallet: token list PR"
-echo "   3. Create Raydium liquidity pool after presale closes"
-echo "   4. Update alphanetx.xyz with the token address"
+echo "   2. Set on-chain metadata with metaboss or Metaplex SDK"
+echo "   3. Run post-presale-migrate.sh to generate distribution CSV"
+echo "   4. Distribute tokens to presale contributors"
+echo "   5. Create Raydium liquidity pool with remaining treasury balance"
+echo "   6. Update alphanetx.xyz with the token address"
 echo ""
 echo "   ⚠️  SAVE THE TOKEN MINT ADDRESS. There is no recovery."
 echo "   ⚠️  SAVE THE WALLET KEYPAIR. You need it to manage the token."
