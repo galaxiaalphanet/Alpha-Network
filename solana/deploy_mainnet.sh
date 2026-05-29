@@ -180,7 +180,7 @@ echo ""
 # ── Step 4: Transfer to Treasury ─────────────────────────────────────────────
 echo -e "${CYN}━━━ Step 4: Transfer Full Supply to Treasury ━━━${NC}"
 # Create treasury token account if it doesn't exist, then transfer all tokens
-spl-token transfer "$TOKEN_MINT" "$TOTAL_SUPPLY" "$TREASURY_WALLET" --fund-recipient
+spl-token transfer "$TOKEN_MINT" 1000000000 "$TREASURY_WALLET" --fund-recipient
 echo -e "   ${GRN}✅ Transferred $TOTAL_SUPPLY $TOKEN_SYMBOL to treasury:${NC} $TREASURY_WALLET"
 echo ""
 
