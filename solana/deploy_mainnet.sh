@@ -29,7 +29,7 @@ TOKEN_DECIMALS=8
 TOTAL_SUPPLY=1000000000  # 1 billion (in base units = 1e8 per token)
 MINT_AUTHORITY=""        # Set to your wallet pubkey. Leave empty to disable future minting.
 DEPLOY_WALLET="/root/.config/solana/alpha-deploy.json"
-METADATA_URI=""            # Fill in after Pinata upload (Arweave/IPFS URI)
+METADATA_URI="ipfs://bafkreidcsa3g7ooarwwbaoekm76mfxsmr6onae5uuhwjehj4omeak6iy2q"  # Locked — IPFS metadata URI
 TREASURY_WALLET="BypHj4Y4f9J5ajAu28gJZFJCR1cLr3CTU8E86THMK1bi"
 
 NETWORK="mainnet-beta"
