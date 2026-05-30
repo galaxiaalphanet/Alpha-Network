@@ -593,6 +593,7 @@ function updateStats() {
     label.textContent = '0d 0h';
     sub.textContent = 'presale ended';
     if (badge) badge.innerHTML = '\uD83C\uDFAF Presale Ended — May 30';
+    var sb=document.getElementById('send-btn');if(sb){sb.disabled=true;sb.textContent='Presale Ended';}
   }
 
   if (totalRaised >= HARD_CAP) {
@@ -757,6 +758,7 @@ function updateCalculator() {
   document.getElementById('calc-amount').textContent = alpha.toLocaleString() + ' $ALPHA';
 
   var sendBtn = document.getElementById('send-btn');
+  if(Date.now()>=PRESALE_END){sendBtn.disabled=true;sendBtn.textContent='Presale Ended';return;}
   if (val >= MIN_SOL && val <= MAX_SOL && walletConnected) {
     sendBtn.disabled = false;
   } else {
@@ -766,6 +768,7 @@ function updateCalculator() {
 
 // ── Send SOL ──
 async function sendSOL() {
+  if(Date.now()>=PRESALE_END){showError('Presale has ended.');return;}
   var input = document.getElementById('sol-amount');
   var val = parseFloat(input.value);
 
