@@ -35,8 +35,9 @@ a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 ::selection{background:var(--accent);color:#fff}
 ::-webkit-scrollbar{width:8px;height:8px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:rgba(0,229,255,0.2);border-radius:4px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,229,255,0.4)}
 
 /* Ambient Background */
 .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -209,10 +210,10 @@ nav.main{padding:12px 16px}
 <div class="nav-links">
 <a href="/">Home</a>
 <a href="/explorer">Explorer</a>
-<a href="/explorer/blocks">Blocks</a>
-<a href="/explorer/agents">Agents</a>
-<a href="/explorer/tasks" class="active">Tasks</a>
-<a href="/explorer/intelligence">Intelligence</a>
+<a href="/blocks">Blocks</a>
+<a href="/agents">Agents</a>
+<a href="/tasks" class="active">Tasks</a>
+<a href="/intelligence">Intelligence</a>
 </div>
 <a href="/" class="nav-cta">
 Back to Home
@@ -362,8 +363,28 @@ Back to Home
 
 <script>
 /* ═══════ LIVE STATS ═══════ */
-// using real API now
-// replaced with real API fetch
+let blockHeight = 4000000;
+async function fetchLiveData(){
+  try{
+    const r = await fetch("/api/v1/chain/info");
+    const d = await r.json();
+    blockHeight = d.height;
+    const h = d.height.toLocaleString();
+    document.getElementById("tb-block").textContent = h;
+    document.getElementById("tb-agents").textContent = d.agent_count;
+    document.getElementById("tb-bps").textContent = d.blocks_per_sec.toFixed(2);
+  }catch(e){}
+}
+fetchLiveData();
+setInterval(fetchLiveData, 2000);
+/* ═══════ TASK DATA ═══════ */
+const taskTypes = ['Image Classification', 'Text Inference', 'Vector Embedding', 'Code Generation', 'Data Verification', 'Sentiment Analysis'];
+const agents = ['Athena', 'Orion', 'Nova', 'Helios', 'Vertex', 'Unassigned'];
+const priorities = ['high', 'medium', 'low'];
+const statuses = ['open', 'processing', 'completed'];
+
+let tasksData = [];
+let selectedTaskId = null;
 let currentFilter = 'all';
 
 function generateTaskId() {
@@ -581,21 +602,6 @@ drawChart();
 
 // Initial render
 renderTasks();
-
-/* LIVE DATA FROM REAL API */
-let blockHeight=0;
-async function fetchLiveData(){
-  try{
-    const r=await fetch("/api/v1/chain/info");
-    const d=await r.json();
-    const h=d.height.toLocaleString();
-    document.getElementById("tb-block").textContent=h;
-    document.getElementById("tb-agents").textContent=d.agent_count;
-    document.getElementById("tb-bps").textContent=d.blocks_per_sec.toFixed(2);
-  }catch(e){}}
-}
-fetchLiveData();setInterval(fetchLiveData,2000);
-
 </script>
 
 </body>
