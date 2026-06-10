@@ -255,8 +255,7 @@ Back to Home
 <div>Reward</div>
 <div>Status</div>
 </div>
-<div id="blocksList">
-<!-- Blocks will be populated by JavaScript -->
+<div id="blocksList"><div style="padding:48px;text-align:center;color:var(--text-secondary)" id="blocks-loading">⟳ Loading blocks from chain...</div>
 </div>
 </div>
 
@@ -336,7 +335,7 @@ Back to Home
 </footer>
 
 <script>
-let blockHeight=0;
+let blockHeight=4180000;
 /* ═══════ LIVE STATS ═══════ */
 // using real API now
 // replaced with real API fetch
@@ -563,6 +562,8 @@ firstRow.style.background = '';
 
 /* LIVE DATA FROM REAL API */
 async function fetchLiveData(){
+async function fetchLiveData(){
+  const loadEl=document.getElementById("blocks-loading");if(loadEl)loadEl.style.display="none";
   try{
     const r=await fetch("/api/v1/chain/info");
     const d=await r.json();
