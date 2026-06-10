@@ -319,20 +319,8 @@ Back to Home
 
 <script>
 /* ═══════ LIVE STATS ═══════ */
-let blockHeight = 3109457;
-setInterval(() => {
-blockHeight += Math.floor(Math.random() * 3) + 1;
-const h = blockHeight.toLocaleString();
-document.getElementById('tb-block').textContent = h;
-document.getElementById('stat-blocks').textContent = h;
-}, 500);
-
-let iqValue = 847;
-setInterval(() => {
-iqValue += Math.floor((Math.random() - 0.48) * 2);
-const v = Math.max(800, Math.min(900, iqValue));
-document.getElementById('stat-iq').textContent = v;
-}, 3000);
+// using real API now
+// replaced with real API fetch
 
 /* ═══════ RECENT BLOCKS ═══════ */
 const blocksData = [];
@@ -523,6 +511,25 @@ chartData.iq.shift();
 chartData.iq.push(Math.floor(Math.random() * 50) + 800);
 drawChart();
 }, 5000);
+
+/* LIVE DATA FROM REAL API */
+let blockHeight=0;
+async function fetchLiveData(){
+  try{
+    const r=await fetch("/api/v1/chain/info");
+    const d=await r.json();
+    blockHeight=d.height;
+    const h=d.height.toLocaleString();
+    const tbB=document.getElementById("tb-block"); if(tbB)tbB.textContent=h;
+    const tbA=document.getElementById("tb-agents"); if(tbA)tbA.textContent=d.agent_count;
+    const tbBps=document.getElementById("tb-bps"); if(tbBps)tbBps.textContent=d.blocks_per_sec.toFixed(2);
+    const sb=document.getElementById("stat-blocks")||document.getElementById("stat-total"); if(sb)sb.textContent=h;
+    const sa=document.getElementById("stat-agents"); if(sa)sa.textContent=d.agent_count;
+    const mb=document.getElementById("m-blocks"); if(mb)mb.textContent=(d.height/1000000).toFixed(1)+"M+";
+  }catch(e){}
+}
+fetchLiveData();setInterval(fetchLiveData,2000);
+
 </script>
 
 </body>

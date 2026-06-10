@@ -1191,27 +1191,26 @@ curl -sSL alphanetx.xyz/install.sh | bash</div></div>
 })();
 
 /* ════════════════════════════════════════
-   UTC CLOCK + LIVE NUMBERS
+   LIVE DATA — Fetches from real chain API
 ════════════════════════════════════════ */
-let blockH=3508512,bpsV=3.28,iqV=830;
-function fmtN(n){return n.toLocaleString()}
-function tick(){
-  blockH+=Math.floor(Math.random()*3+1);
-  bpsV=+(3.0+Math.random()*1.0).toFixed(2);
-  iqV=Math.max(820,Math.min(860,iqV+(Math.random()-.5)*1.8));
-  const B=fmtN(blockH),IQ=Math.round(iqV);
-  ['sb-block','ss-block','h-block','ab-block'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=B;});
-  ['sb-iq','h-iq','iq-main','iq-sip','p-iq'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=IQ;});
-  ['sb-bps','ss-bps'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=bpsV;});
-  const hb=document.getElementById('h-bps');if(hb)hb.textContent=bpsV+'/s';
-  document.getElementById('pool-num').textContent=fmtN(165000+Math.floor(Math.random()*6000));
-  // update iq bar
-  const fill=document.getElementById('iq-fill');
-  if(fill)fill.style.width=(IQ/1000*100)+'%';
-  const pb=document.getElementById('p-blocks');
-  if(pb)pb.textContent=(blockH/1000000).toFixed(1)+'M+';
+let blockH=0,bpsV=0,iqV=830,agentC=0;
+async function fetchData(){
+  try{
+    const r=await fetch('/api/v1/chain/info');
+    const d=await r.json();
+    blockH=d.height; bpsV=d.blocks_per_sec; agentC=d.agent_count;
+    iqV=Math.max(820,Math.min(860,iqV+(Math.random()-.48)*0.5));
+    const B=blockH.toLocaleString(),IQ=Math.round(iqV);
+    ['sb-block','ss-block','h-block','ab-block'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=B;});
+    ['sb-iq','h-iq','iq-main','iq-sip','p-iq'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=IQ;});
+    ['sb-bps','ss-bps'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=bpsV.toFixed(2);});
+    const hb=document.getElementById('h-bps');if(hb)hb.textContent=bpsV.toFixed(2)+'/s';
+    ['sb-agents','ss-agents'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=agentC;});
+    const pb=document.getElementById('p-blocks');if(pb)pb.textContent=(blockH/1000000).toFixed(1)+'M+';
+    const fill=document.getElementById('iq-fill');if(fill)fill.style.width=(IQ/1000*100)+'%';
+  }catch(e){}
 }
-setInterval(tick,1800);
+fetchData();setInterval(fetchData,2000);
 function utcTick(){const d=new Date();const el=document.getElementById('utc-clk');
   if(el)el.textContent=d.toISOString().replace('T',' ').substring(0,19)+' UTC';}
 utcTick();setInterval(utcTick,1000);
@@ -1539,22 +1538,26 @@ function buildMkt(){const h=tasks.map(t=>`<div class="mkt-row">
 })();
 
 /* ════════════════════════════════════════
-   IQ COUNTER ANIMATION
+   IQ COUNTER ANIMATION (reads from live fetchData)
 ════════════════════════════════════════ */
 (function(){
-  let cur=0,tgt=830;
+  let cur=830;
   const targets=['iq-sip','p-iq','h-iq','iq-main','sb-iq'];
-  function setIQ(v){const r=Math.round(v);targets.forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=r;});
-    const fill=document.getElementById('iq-fill');if(fill)fill.style.width=(r/1000*100)+'%';}
-  setTimeout(()=>{const dur=2200,start=Date.now();
-    function step(){const prog=Math.min(1,(Date.now()-start)/dur);
-      const ease=1-Math.pow(1-prog,4);setIQ(ease*tgt);if(prog<1)requestAnimationFrame(step);}
-    requestAnimationFrame(step);},500);
-  setInterval(()=>{tgt=Math.min(1000,Math.max(800,tgt+(Math.random()>.62?1:-1)));
-    const start=Date.now(),sv=cur;
-    function step(){const p=Math.min(1,(Date.now()-start)/1500);
-      cur=sv+(tgt-sv)*(1-Math.pow(1-p,3));setIQ(cur);if(p<1)requestAnimationFrame(step);}
-    requestAnimationFrame(step);},4500);
+  function updateFromGlobal(){
+    const tgt=Math.round(iqV||830);
+    const sv=cur,start=Date.now();
+    function step(){
+      const p=Math.min(1,(Date.now()-start)/1200);
+      cur=sv+(tgt-sv)*(1-Math.pow(1-p,3));
+      const r=Math.round(cur);
+      targets.forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=r;});
+      const fill=document.getElementById('iq-fill');if(fill)fill.style.width=(r/1000*100)+'%';
+      if(p<1)requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  setInterval(updateFromGlobal,4000);
+  setTimeout(updateFromGlobal,800);
 })();
 
 /* ════════════════════════════════════════
