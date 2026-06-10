@@ -421,9 +421,7 @@ setTimeout(() => { titleEl.textContent = ch.title; titleEl.style.opacity = '1'; 
 let blockHeight = 3508512;
 let iqValue = 847;
 function updateLiveStats() {
-blockHeight += Math.floor(Math.random() * 3) + 1;
-document.getElementById('tb-block').textContent = blockHeight.toLocaleString();
-// m-blocks now from fetchLiveData = (blockHeight / 1000000).toFixed(1) + 'M+';
+// blockHeight and tb-block handled by fetchLiveData from real API
 iqValue += (Math.random() - 0.48) * 0.5;
 iqValue = Math.max(800, Math.min(900, iqValue));
 const iq = Math.round(iqValue);
