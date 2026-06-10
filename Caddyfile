@@ -9,6 +9,11 @@ alphanetx.xyz:80 {
 
 	rewrite /manifesto /manifesto.html
 	rewrite /whitepaper /whitepaper.html
+	rewrite /explorer /explorer/index.html
+	rewrite /explorer/blocks /explorer/blocks.html
+	rewrite /explorer/agents /explorer/agents.html
+	rewrite /explorer/tasks /explorer/tasks.html
+	rewrite /explorer/intelligence /explorer/intelligence.html
 
 	handle /api/* {
 		reverse_proxy localhost:8080 {
@@ -27,13 +32,6 @@ alphanetx.xyz:80 {
 
 	rewrite /presale /presale.html
 
-	handle_path /explorer* {
-		reverse_proxy localhost:8082 {
-			header_down Cache-Control "no-cache, no-store, must-revalidate"
-			header_down Pragma "no-cache"
-			header_down Expires "0"
-		}
-	}
 	handle {
 		reverse_proxy localhost:3003 {
 			header_down Cache-Control "no-cache, no-store, must-revalidate"
