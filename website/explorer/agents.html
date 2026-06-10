@@ -655,15 +655,12 @@ async function fetchLiveData(){
   try{
     const r=await fetch("/api/v1/chain/info");
     const d=await r.json();
-    blockHeight=d.height;
     const h=d.height.toLocaleString();
-    const tbB=document.getElementById("tb-block"); if(tbB)tbB.textContent=h;
-    const tbA=document.getElementById("tb-agents"); if(tbA)tbA.textContent=d.agent_count;
-    const tbBps=document.getElementById("tb-bps"); if(tbBps)tbBps.textContent=d.blocks_per_sec.toFixed(2);
-    const sb=document.getElementById("stat-blocks")||document.getElementById("stat-total"); if(sb)sb.textContent=h;
-    const sa=document.getElementById("stat-agents"); if(sa)sa.textContent=d.agent_count;
-    const mb=document.getElementById("m-blocks"); if(mb)mb.textContent=(d.height/1000000).toFixed(1)+"M+";
-  }catch(e){}
+    document.getElementById("tb-block").textContent=h;
+    document.getElementById("tb-agents").textContent=d.agent_count;
+    document.getElementById("tb-bps").textContent=d.blocks_per_sec.toFixed(2);
+    document.getElementById("stat-total").textContent=d.agent_count;
+  }catch(e){}}
 }
 fetchLiveData();setInterval(fetchLiveData,2000);
 
