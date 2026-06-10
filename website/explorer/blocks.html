@@ -562,7 +562,6 @@ firstRow.style.background = '';
 
 /* LIVE DATA FROM REAL API */
 async function fetchLiveData(){
-async function fetchLiveData(){
   const loadEl=document.getElementById("blocks-loading");if(loadEl)loadEl.style.display="none";
   try{
     const r=await fetch("/api/v1/chain/info");
