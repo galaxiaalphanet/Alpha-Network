@@ -318,6 +318,7 @@ Back to Home
 </footer>
 
 <script>
+let blockHeight=0;
 /* ═══════ LIVE STATS ═══════ */
 // using real API now
 // replaced with real API fetch
@@ -513,7 +514,6 @@ drawChart();
 }, 5000);
 
 /* LIVE DATA FROM REAL API */
-let blockHeight=0;
 async function fetchLiveData(){
   try{
     const r=await fetch("/api/v1/chain/info");
