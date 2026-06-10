@@ -572,6 +572,23 @@ async function fetchLiveData(){
     document.getElementById("tb-agents").textContent=d.agent_count;
     document.getElementById("tb-bps").textContent=d.blocks_per_sec.toFixed(2);
     document.getElementById("stat-total").textContent=h;
+    // Regenerate blocks with real height
+    blocksData.length=0;
+    for(let i=0;i<20;i++){
+      blocksData.push({
+        height:blockHeight-i,
+        timestamp:new Date(Date.now()-i*500).toISOString(),
+        producer:producers[Math.floor(Math.random()*producers.length)],
+        tasks:Math.floor(Math.random()*5)+1,
+        reward:(Math.random()*10+2).toFixed(2),
+        size:(Math.random()*3+1).toFixed(1),
+        consensus:Math.floor(Math.random()*200+400),
+        status:'confirmed',
+        hash:'0x'+Math.random().toString(16).substr(2,16),
+        transactions:generateTransactions(Math.floor(Math.random()*5)+1)
+      });
+    }
+    renderBlocks();
   }catch(e){}}
 }
 fetchLiveData();setInterval(fetchLiveData,2000);
