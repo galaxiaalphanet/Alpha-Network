@@ -5,7 +5,10 @@
 alphanetx.xyz:80 {
 	bind 0.0.0.0
 
-	redir /whitepaper.html https://github.com/galaxiaalphanet/Alpha-Network/blob/main/whitepaper/ALPHA_WHITEPAPER.md 301
+	redir /whitepaper.html /whitepaper 301
+
+	rewrite /manifesto /manifesto.html
+	rewrite /whitepaper /whitepaper.html
 
 	handle /api/* {
 		reverse_proxy localhost:8080 {
@@ -24,7 +27,7 @@ alphanetx.xyz:80 {
 
 	rewrite /presale /presale.html
 
-	handle /explorer* {
+	handle_path /explorer* {
 		reverse_proxy localhost:8082 {
 			header_down Cache-Control "no-cache, no-store, must-revalidate"
 			header_down Pragma "no-cache"
