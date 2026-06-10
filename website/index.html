@@ -488,7 +488,8 @@ nav{position:fixed;top:26px;left:0;right:0;z-index:399;height:58px;
   background:var(--c);transform:scaleX(0);transform-origin:center;transition:transform .35s}
 .fw-card:hover::before{transform:scaleX(1)}
 .fw-card:hover{background:rgba(0,229,255,0.03)}
-.fw-icon{font-size:22px;margin-bottom:8px}
+.fw-icon{width:36px;height:36px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
+.fw-icon img{width:100%;height:100%;object-fit:contain;display:block}
 .fw-name{font-family:var(--alt);font-size:10.5px;font-weight:700;
   color:var(--text3);margin-bottom:2px}
 .fw-meta{font-family:var(--mono);font-size:7.5px;color:var(--text2);text-transform:uppercase}
@@ -1058,11 +1059,11 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
   <!-- Framework grid -->
   <div style="font-family:var(--mono);font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--text2);margin-top:40px" class="fade-up">Compatible With Every AI Framework</div>
   <div class="fw-grid fade-up">
-    <div class="fw-card"><div class="fw-icon">🦞</div><div class="fw-name">OpenClaw</div><div class="fw-meta">345K instances</div><div><span class="fw-badge live">SKILL READY</span></div></div>
-    <div class="fw-card"><div class="fw-icon">🏛️</div><div class="fw-name">Hermes</div><div class="fw-meta">224B tokens/day</div><div><span class="fw-badge live">SKILL READY</span></div></div>
-    <div class="fw-card"><div class="fw-icon">⛓️</div><div class="fw-name">LangChain</div><div class="fw-meta">Python / JS</div><div><span class="fw-badge live">SDK READY</span></div></div>
-    <div class="fw-card"><div class="fw-icon">🐍</div><div class="fw-name">Python SDK</div><div class="fw-meta">PyPI live</div><div><span class="fw-badge live">PUBLISHED</span></div></div>
-    <div class="fw-card"><div class="fw-icon">🤖</div><div class="fw-name">AutoGen</div><div class="fw-meta">Multi-agent</div><div><span class="fw-badge soon">COMING SOON</span></div></div>
+    <div class="fw-card"><div class="fw-icon"><img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openclaw-dark.svg" alt="OpenClaw"></div><div class="fw-name">OpenClaw</div><div class="fw-meta">345K instances</div><div><span class="fw-badge live">SKILL READY</span></div></div>
+    <div class="fw-card"><div class="fw-icon"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@latest/light/hermesagent.png" alt="Hermes"></div><div class="fw-name">Hermes</div><div class="fw-meta">224B tokens/day</div><div><span class="fw-badge live">SKILL READY</span></div></div>
+    <div class="fw-card"><div class="fw-icon"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@latest/light/langchain-color.png" alt="LangChain"></div><div class="fw-name">LangChain</div><div class="fw-meta">Python / JS</div><div><span class="fw-badge live">SDK READY</span></div></div>
+    <div class="fw-card"><div class="fw-icon"><img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/python.svg" alt="Python SDK"></div><div class="fw-name">Python SDK</div><div class="fw-meta">PyPI live</div><div><span class="fw-badge live">PUBLISHED</span></div></div>
+    <div class="fw-card"><div class="fw-icon"><img src="https://jvcrzxkmgvnnhrsvqmds.supabase.co/storage/v1/object/public/linkgo-images/tools/logos/original-autogen_logo-large-1759334504954.webp" alt="AutoGen"></div><div class="fw-name">AutoGen</div><div class="fw-meta">Multi-agent</div><div><span class="fw-badge soon">COMING SOON</span></div></div>
   </div>
 
   <!-- Compare table -->
