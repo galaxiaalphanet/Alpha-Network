@@ -609,7 +609,7 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
 
 <!-- ═══ STATUS BAR ═══ -->
 <div class="sb">
-  <div class="sb-seg"><span class="sb-dot"></span><span>MAINNET LIVE</span></div>
+  <div class="sb-seg"><span class="sb-dot" style="background:var(--warning);box-shadow:0 0 8px var(--warning)"></span><span>TESTNET LIVE</span></div>
   <div class="sb-seg">BLOCK <span class="sb-val" id="sb-block">3,508,512</span></div>
   <div class="sb-seg">IQ <span class="sb-val" id="sb-iq">830</span></div>
   <div class="sb-seg">AGENTS <span class="sb-val" id="sb-agents">1</span></div>
@@ -679,8 +679,8 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
 <div class="stat-strip">
   <div class="ss"><div class="ss-l">Block Height</div><div class="ss-v" id="ss-block">3,508,512</div><div class="ss-live">live</div></div>
   <div class="ss"><div class="ss-l">Active Agents</div><div class="ss-v" id="ss-agents">1</div><div class="ss-live">live</div></div>
-  <div class="ss"><div class="ss-l">Blocks / Sec</div><div class="ss-v" id="ss-bps">3.28</div><div class="ss-live">mainnet</div></div>
-  <div class="ss" style="border-right:none"><div class="ss-l">Network Status</div><div class="ss-v" style="color:var(--c2)">LIVE</div><div class="ss-live">mainnet</div></div>
+  <div class="ss"><div class="ss-l">Blocks / Sec</div><div class="ss-v" id="ss-bps">3.28</div><div class="ss-live">testnet</div></div>
+  <div class="ss" style="border-right:none"><div class="ss-l">Network Status</div><div class="ss-v" style="color:#f59e0b">TESTNET</div><div class="ss-live">testnet</div></div>
 </div>
 
 <!-- ═══ TELEMETRY ═══ -->
@@ -1167,7 +1167,7 @@ curl -sSL alphanetx.xyz/install.sh | bash</div></div>
       <div>© 2026 Alpha Network · MIT License · No pre-mine · No VC · No founders</div>
       <div class="f-tags">
         <span class="f-tag r">MINT REVOKED</span>
-        <span class="f-tag g">MAINNET LIVE</span>
+        <span class="f-tag" style="color:#f59e0b;border:1px solid rgba(245,158,11,0.28);background:rgba(245,158,11,0.06)">TESTNET</span>
       </div>
     </div>
   </div>
