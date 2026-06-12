@@ -70,10 +70,11 @@ func main() {
 	l := ledger.NewLedger(core.Amount(genConfig.TotalSupply))
 
 	// ── 3. BadgerDB Store ─────────────────────────────────────────────────────
-	storeDir := filepath.Join(*dataDir, "data")
-	if err := os.MkdirAll(storeDir, 0755); err != nil {
-		log.Fatalf("create store dir: %v", err)
-	}
+	// Uses *dataDir directly (not a "data" subdirectory) so the store
+	// reads from the same directory that contains genesis.json.
+	// This matches our historical layout where the BadgerDB MANIFEST
+	// and SST/vlog files live alongside genesis.json.
+	storeDir := *dataDir
 	st, err := store.Open(storeDir)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
