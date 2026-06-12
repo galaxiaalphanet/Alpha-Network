@@ -71,8 +71,9 @@ type BlockProducer struct {
 	registry *agent.Registry
 
 	// atomic counters for lock-free stat reads
-	height  uint64
-	txCount uint64
+	height      uint64
+	txCount     uint64
+	startHeight uint64 // height at producer start — used for accurate BPS calculation
 
 	startTime time.Time
 	started   int32 // atomic flag
@@ -323,6 +324,7 @@ func (p *BlockProducer) Start(ctx context.Context) {
 	if !atomic.CompareAndSwapInt32(&p.started, 0, 1) {
 		return
 	}
+	atomic.StoreUint64(&p.startHeight, atomic.LoadUint64(&p.height))
 	p.startTime = time.Now()
 
 	go p.loop(ctx)
@@ -388,11 +390,12 @@ func (p *BlockProducer) GetChainHeight() uint64 {
 // GetChainStats returns a live snapshot of chain performance
 func (p *BlockProducer) GetChainStats() *ChainStats {
 	h := atomic.LoadUint64(&p.height)
+	sh := atomic.LoadUint64(&p.startHeight)
 	txCount := atomic.LoadUint64(&p.txCount)
 	elapsed := time.Since(p.startTime).Seconds()
 	bps := 0.0
-	if elapsed > 0 {
-		bps = float64(h) / elapsed
+	if elapsed > 0 && h > sh {
+		bps = float64(h-sh) / elapsed
 	}
 	p.mu.RLock()
 	agents := p.agentCount
