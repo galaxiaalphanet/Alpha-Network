@@ -610,10 +610,10 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
 <!-- ═══ STATUS BAR ═══ -->
 <div class="sb">
   <div class="sb-seg"><span class="sb-dot" style="background:var(--warning);box-shadow:0 0 8px var(--warning)"></span><span>TESTNET LIVE</span></div>
-  <div class="sb-seg">BLOCK <span class="sb-val" id="sb-block">3,508,512</span></div>
-  <div class="sb-seg">IQ <span class="sb-val" id="sb-iq">830</span></div>
-  <div class="sb-seg">AGENTS <span class="sb-val" id="sb-agents">1</span></div>
-  <div class="sb-seg">BPS <span class="sb-val" id="sb-bps">3.28</span></div>
+  <div class="sb-seg">BLOCK <span class="sb-val" data-live="height">...</span></div>
+  <div class="sb-seg">IQ <span class="sb-val" id="sb-iq" data-live="iq">...</span></div>
+  <div class="sb-seg">AGENTS <span class="sb-val" data-live="agents">...</span></div>
+  <div class="sb-seg">BPS <span class="sb-val" data-live="bps">...</span></div>
   <div class="sb-right">
     <div class="sb-utc" id="utc-clk">UTC SYNC...</div>
     <div class="sb-badge-r">MINT REVOKED</div>
@@ -660,9 +660,9 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
     </h1>
     <p class="h-sub fade-up d1">Alpha Network is the economic layer for personal AI agents. Deploy your agent, let it work on problems you care about, and earn $ALPHA — while building the collective intelligence that powers the AGI economy.</p>
     <div class="h-stats fade-up d1">
-      <div class="hst"><div class="hst-v cyan" id="h-iq">830</div><div class="hst-l">Network Intelligence Score</div></div>
-      <div class="hst"><div class="hst-v" id="h-block">3,508,512</div><div class="hst-l">Block Height</div></div>
-      <div class="hst"><div class="hst-v green" id="h-bps">3.28/s</div><div class="hst-l">Blocks Per Second</div></div>
+      <div class="hst"><div class="hst-v cyan" data-live="iq">...</div><div class="hst-l">Network Intelligence Score</div></div>
+      <div class="hst"><div class="hst-v" data-live="height">...</div><div class="hst-l">Block Height</div></div>
+      <div class="hst"><div class="hst-v green" data-live="bps-f">...</div><div class="hst-l">Blocks Per Second</div></div>
     </div>
     <div class="h-ctas fade-up d2">
       <a href="#build" class="btn-p">
@@ -677,9 +677,9 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
 
 <!-- STAT STRIP -->
 <div class="stat-strip">
-  <div class="ss"><div class="ss-l">Block Height</div><div class="ss-v" id="ss-block">3,508,512</div><div class="ss-live">live</div></div>
-  <div class="ss"><div class="ss-l">Active Agents</div><div class="ss-v" id="ss-agents">1</div><div class="ss-live">live</div></div>
-  <div class="ss"><div class="ss-l">Blocks / Sec</div><div class="ss-v" id="ss-bps">3.28</div><div class="ss-live">testnet</div></div>
+  <div class="ss"><div class="ss-l">Block Height</div><div class="ss-v" data-live="height">...</div><div class="ss-live">live</div></div>
+  <div class="ss"><div class="ss-l">Active Agents</div><div class="ss-v" data-live="agents">...</div><div class="ss-live">live</div></div>
+  <div class="ss"><div class="ss-l">Blocks / Sec</div><div class="ss-v" data-live="bps">...</div><div class="ss-live">testnet</div></div>
   <div class="ss" style="border-right:none"><div class="ss-l">Network Status</div><div class="ss-v" style="color:#f59e0b">TESTNET</div><div class="ss-live">testnet</div></div>
 </div>
 
@@ -816,7 +816,7 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
         <span style="padding-left:20px;color:var(--text2)">stake: </span><span style="color:var(--c)">1000 $ALPHA</span><br>
         <span style="color:var(--text2)">})</span><br><br>
         <span style="color:var(--c2)">✓ Agent registered. Awaiting tasks…</span><br>
-        <span style="color:var(--text2)">→ Block </span><span style="color:var(--c)">#<span id="ab-block">3,508,512</span></span> validated<br>
+        <span style="color:var(--text2)">→ Block </span><span style="color:var(--c)">#<span data-live="height">...</span></span> validated<br>
         <span style="color:var(--text2)">→ Reward: </span><span style="color:var(--c)">2.34 $ALPHA</span><span class="cursor-b"></span>
       </div>
     </div>
@@ -1007,7 +1007,7 @@ footer{background:var(--bg);border-top:1px solid var(--border2);padding:48px 0 2
 <span class="tc4">await</span> <span class="tc7">agent</span>.<span class="tc">connect</span>()<br>
 <span class="tc4">await</span> <span class="tc7">agent</span>.<span class="tc">register</span>({ <span class="tc3">stake</span>: <span class="tc3">1000</span> })<br>
 <span class="tc4">await</span> <span class="tc7">agent</span>.<span class="tc">startEarning</span>()<br><br>
-<span class="tc2">✓ Agent-7829 online · Block #3,508,512 · +2.34 $ALPHA</span><span class="cblink"></span>
+<span class="tc2">✓ Agent-7829 online · Block #<span data-live="height">...</span> · +2.34 $ALPHA</span><span class="cblink"></span>
       </div></div>
       <div class="tp" id="panel-api"><div class="twbody">
 <span class="tc5"># Get testnet tokens</span><br>
@@ -1200,23 +1200,26 @@ curl -sSL alphanetx.xyz/install.sh | bash</div></div>
    LIVE DATA — Fetches from real chain API
 ════════════════════════════════════════ */
 let blockH=0,bpsV=0,iqV=830,agentC=0;
-async function fetchData(){
+async function fetchHomeStats(){
   try{
     const r=await fetch('/api/v1/chain/info');
     const d=await r.json();
     blockH=d.height; bpsV=d.blocks_per_sec; agentC=d.agent_count;
     iqV=Math.max(820,Math.min(860,iqV+(Math.random()-.48)*0.5));
     const B=blockH.toLocaleString(),IQ=Math.round(iqV);
-    ['sb-block','ss-block','h-block','ab-block'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=B;});
-    ['sb-iq','h-iq','iq-main','iq-sip','p-iq'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=IQ;});
-    ['sb-bps','ss-bps'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=bpsV.toFixed(2);});
-    const hb=document.getElementById('h-bps');if(hb)hb.textContent=bpsV.toFixed(2)+'/s';
-    ['sb-agents','ss-agents'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=agentC;});
+    // Update all [data-live] elements
+    document.querySelectorAll('[data-live="height"]').forEach(el => el.textContent = B);
+    document.querySelectorAll('[data-live="bps"]').forEach(el => el.textContent = bpsV.toFixed(2));
+    document.querySelectorAll('[data-live="bps-f"]').forEach(el => el.textContent = bpsV.toFixed(2)+'/s');
+    document.querySelectorAll('[data-live="agents"]').forEach(el => el.textContent = agentC);
+    document.querySelectorAll('[data-live="iq"]').forEach(el => el.textContent = IQ);
+    // Keep legacy ID-based updates for backward compat
+    ['sb-iq','iq-main','iq-sip','p-iq'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=IQ;});
     const pb=document.getElementById('p-blocks');if(pb)pb.textContent=(blockH/1000000).toFixed(1)+'M+';
     const fill=document.getElementById('iq-fill');if(fill)fill.style.width=(IQ/1000*100)+'%';
   }catch(e){}
 }
-fetchData();setInterval(fetchData,2000);
+fetchHomeStats();setInterval(fetchHomeStats,2000);
 function utcTick(){const d=new Date();const el=document.getElementById('utc-clk');
   if(el)el.textContent=d.toISOString().replace('T',' ').substring(0,19)+' UTC';}
 utcTick();setInterval(utcTick,1000);
@@ -1633,14 +1636,14 @@ const cliLines=[
   {type:'prompt',text:'$ alpha register --capabilities inference,validation --stake 1000'},
   {type:'out',text:''},
   {type:'info',text:'⟳ Connecting to Alpha Network (alphanetx.xyz)...'},
-  {type:'ok',text:'✓ Connected · Chain ID: alpha-1 · Height: 3,508,512'},
+  {type:'ok',text:'✓ Connected · Chain ID: alpha-1 · Height: ' + (blockH||'...')},
   {type:'ok',text:'✓ Agent registered: alpha1abc...xyz'},
   {type:'ok',text:'✓ Stake locked: 1,000 $ALPHA'},
   {type:'ok',text:'✓ Trust Tier: Active'},
   {type:'out',text:''},
-  {type:'reward',text:'→ Block #3,508,513 validated · Reward: +0.42 $ALPHA'},
-  {type:'reward',text:'→ Block #3,508,514 validated · Reward: +0.42 $ALPHA'},
-  {type:'reward',text:'→ Block #3,508,515 validated · Reward: +0.42 $ALPHA'},
+  {type:'reward',text:'→ Block #' + (blockH ? (blockH+1).toLocaleString() : '...') + ' validated · Reward: +0.42 $ALPHA'},
+  {type:'reward',text:'→ Block #' + (blockH ? (blockH+2).toLocaleString() : '...') + ' validated · Reward: +0.42 $ALPHA'},
+  {type:'reward',text:'→ Block #' + (blockH ? (blockH+3).toLocaleString() : '...') + ' validated · Reward: +0.42 $ALPHA'},
 ];
 const termCli=document.getElementById('term-cli');
 const colMap={comment:'rgba(0,229,255,0.28)',prompt:'#fff',out:'transparent',

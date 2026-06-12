@@ -99,12 +99,23 @@ func main() {
 
 	// ── 5. Chain Initialization (first run only) ──────────────────────────────
 	if !st.HasGenesisBlock() {
-		log.Printf("🌱 First run: initializing chain from genesis...")
-		if err := genesis.InitChainFromGenesis(genConfig, st, l); err != nil {
-			log.Fatalf("init chain: %v", err)
+		// Safety check: if blocks exist but genesis was lost (e.g., compaction),
+		// recreate the genesis block instead of wiping the chain.
+		if st.HasAnyBlocks() {
+			log.Printf("⚠️  Genesis block missing but blocks found — recreating genesis...")
+			if err := st.RecreateGenesisBlock(genConfig); err != nil {
+				log.Fatalf("recreate genesis block: %v", err)
+			}
+			log.Printf("♻️  Genesis block recreated, resuming from persisted state")
+		} else {
+			log.Printf("🌱 First run: initializing chain from genesis...")
+			if err := genesis.InitChainFromGenesis(genConfig, st, l); err != nil {
+				log.Fatalf("init chain: %v", err)
+			}
+			log.Printf("✅ Chain initialized: %s", genConfig.ChainID)
 		}
-		log.Printf("✅ Chain initialized: %s", genConfig.ChainID)
-	} else {
+	}
+	if st.HasGenesisBlock() {
 		// Restore ledger balances from BadgerDB — prefer snapshot for speed
 		snapHeight, snapBalances, snapBurned, snapSupply, snapErr := st.GetLatestSnapshot()
 		if snapErr == nil && len(snapBalances) > 0 {

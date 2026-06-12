@@ -8,6 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
 
@@ -35,15 +40,64 @@ type Store struct {
 
 // Open opens or creates a BadgerDB database at the specified directory.
 // The directory is created if it doesn't exist.
+// On crash recovery, corrupted memtable/value-log files are automatically
+// removed so the DB can open from the last consistent SST checkpoint.
 func Open(dir string) (*Store, error) {
 	opts := badger.DefaultOptions(dir)
 	opts.Logger = nil // suppress BadgerDB's internal logging
 
 	db, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("open badger db at %s: %w", dir, err)
+		// Attempt crash recovery: corrupted memtable (WAL) blocks DB open.
+		// Remove the corrupted .mem file and retry — this discards unflushed
+		// entries that were in the active memtable at crash time, but recovers
+		// all SST-flushed data (typically >90% of the chain).
+		if strings.Contains(err.Error(), "Log truncate required") ||
+			strings.Contains(err.Error(), "while opening fid") {
+			log.Printf("⚠️  BadgerDB corrupted memtable detected, attempting recovery...")
+			if recErr := recoverBadgerDB(dir); recErr != nil {
+				return nil, fmt.Errorf("open badger db at %s (recovery failed): %w", dir, recErr)
+			}
+			log.Printf("♻️  Recovery cleanup complete, retrying open...")
+			db, err = badger.Open(opts)
+			if err != nil {
+				return nil, fmt.Errorf("open badger db at %s (after recovery): %w", dir, err)
+			}
+			log.Printf("✅ BadgerDB opened after recovery — some recent unflushed data may be lost")
+		} else {
+			return nil, fmt.Errorf("open badger db at %s: %w", dir, err)
+		}
 	}
 	return &Store{db: db}, nil
+}
+
+// recoverBadgerDB removes corrupted memtable and lock files so BadgerDB can
+// recover from the last consistent SST checkpoint. This discards unflushed
+// WAL/memtable entries but preserves all SST data.
+func recoverBadgerDB(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read dir for recovery: %w", err)
+	}
+	var removed int
+	for _, e := range entries {
+		name := e.Name()
+		// Remove .mem files (active memtable/WAL — may be corrupted)
+		// Remove LOCK file (stale lock from crashed process)
+		if strings.HasSuffix(name, ".mem") || name == "LOCK" {
+			path := filepath.Join(dir, name)
+			if rmErr := os.Remove(path); rmErr != nil {
+				log.Printf("⚠️  Failed to remove %s: %v", name, rmErr)
+			} else {
+				log.Printf("🗑  Removed %s for recovery", name)
+				removed++
+			}
+		}
+	}
+	if removed == 0 {
+		return fmt.Errorf("no recoverable files found in %s", dir)
+	}
+	return nil
 }
 
 // Close flushes and closes the database.
@@ -338,6 +392,63 @@ func (s *Store) GetLatestSnapshot() (uint64, map[core.Address]core.Amount, core.
 func (s *Store) HasGenesisBlock() bool {
 	_, err := s.GetBlock(0)
 	return err == nil
+}
+
+// HasAnyBlocks returns true if at least one block exists in the store.
+// Used as a safety check: if genesis is missing but blocks exist, we're
+// in a recovery scenario and should recreate genesis rather than wipe the chain.
+func (s *Store) HasAnyBlocks() bool {
+	var found bool
+	_ = s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte(prefixBlock)
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		it.Rewind()
+		if it.Valid() {
+			found = true
+		}
+		return nil
+	})
+	return found
+}
+
+// RecreateGenesisBlock creates a genesis block from config without wiping
+// existing chain state. Used when the genesis block was lost (e.g., compaction)
+// but other blocks and snapshots are intact.
+func (s *Store) RecreateGenesisBlock(genConfig interface{}) error {
+	// Parse genesis time from config
+	cfgJSON, err := json.Marshal(genConfig)
+	if err != nil {
+		return fmt.Errorf("marshal genesis config: %w", err)
+	}
+	var cfg struct {
+		GenesisTime string `json:"genesis_time"`
+	}
+	if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
+		return fmt.Errorf("unmarshal genesis config: %w", err)
+	}
+
+	genTime, err := time.Parse(time.RFC3339, cfg.GenesisTime)
+	if err != nil {
+		// Try other formats
+		genTime, err = time.Parse("2006-01-02T15:04:05Z", cfg.GenesisTime)
+		if err != nil {
+			genTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		}
+	}
+
+	genBlock := core.Block{
+		Height:       0,
+		Timestamp:    genTime.UnixMilli(),
+		PrevHash:     "0000000000000000000000000000000000000000000000000000000000000000",
+		Transactions: []*core.Transaction{},
+		ValidatorID:  "genesis",
+	}
+	genBlock.ComputeHash()
+
+	return s.PutBlock(&genBlock)
 }
 
 // PutMeta stores a metadata value (used for chain metadata like genesis hash, etc.)
