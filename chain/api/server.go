@@ -213,6 +213,7 @@ func (s *Server) SetIntelligence(dbPath string) error {
 
 	s.intelligenceHandler = intelHandler
 	s.intelligenceStorage = intelStorage
+	s.routes() // re-register now that intelligenceHandler is set
 	return nil
 }
 
