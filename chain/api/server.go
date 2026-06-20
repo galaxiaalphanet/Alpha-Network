@@ -16,6 +16,7 @@ import (
 	stdsync "sync"
 	"time"
 
+	"github.com/alpha-network/alpha/api/intelligence"
 	"github.com/alpha-network/alpha/chain/agent"
 	"github.com/alpha-network/alpha/chain/consensus"
 	"github.com/alpha-network/alpha/chain/core"
@@ -53,6 +54,10 @@ type Server struct {
 	govModule   *governance.Module
 	store       *store.Store // BadgerDB persistent store (for presale, other state)
 	allowedCORS []string // allowed CORS origins (empty = allow all, for dev/testnet)
+
+	// Intelligence data layer (BadgerDB-backed, 8 new API endpoints)
+	intelligenceHandler *intelligence.Handler
+	intelligenceStorage *intelligence.Storage
 
 	// Discord webhook URL (optional — POSTs agent registration events)
 	webhookURL string
@@ -179,6 +184,36 @@ func (s *Server) SetPoiEngine(engine *consensus.PoIEngine) {
 // SetStore attaches the BadgerDB store for presale tracking and other persistent state.
 func (s *Server) SetStore(st *store.Store) {
 	s.store = st
+}
+
+// SetIntelligence initialises the intelligence data layer (BadgerDB-backed).
+// Must be called after SetPoiEngine / SetMonitor but before Start().
+func (s *Server) SetIntelligence(dbPath string) error {
+	intelStorage, err := intelligence.NewStorage(dbPath)
+	if err != nil {
+		return fmt.Errorf("intelligence storage: %w", err)
+	}
+
+	intelHandler := intelligence.NewHandler(
+		intelStorage,
+		func() uint64 {
+			if s.producer != nil {
+				return s.producer.GetChainHeight()
+			}
+			return 0
+		},
+		func(address string) float64 {
+			agent, err := s.registry.GetAgent(core.AgentID(address))
+			if err != nil || agent == nil {
+				return 100.0 // default IQ for unknown agents
+			}
+			return float64(agent.ReputationScore)
+		},
+	)
+
+	s.intelligenceHandler = intelHandler
+	s.intelligenceStorage = intelStorage
+	return nil
 }
 
 // SetDiscordWebhook configures a Discord webhook URL for agent registration broadcasts.
@@ -412,12 +447,18 @@ func (s *Server) routes() {
 
 	// --- v0.2 endpoints ---
 
-	// Intelligence layer
+	// Intelligence layer (v0.2 — Oracle-based, retained for backward compatibility)
 	s.mux.HandleFunc("/api/v1/intelligence/query", s.handleIntelligenceQuery)
-	s.mux.HandleFunc("/api/v1/intelligence/stats", s.handleIntelligenceStats)
 	s.mux.HandleFunc("/api/v1/intelligence/top", s.handleIntelligenceTop)
 	s.mux.HandleFunc("/api/v1/intelligence/subscribe", s.handleIntelligenceSubscribe)
 	s.mux.HandleFunc("/api/v1/intelligence/export", s.handleIntelligenceExport)
+
+	// Intelligence layer v3 — BadgerDB-backed data layer (8 new endpoints)
+	// Registers: /api/v1/intelligence/submit, /vote, /label, /feedback,
+	//            /feed, /challenge, /leaderboard, /agent/, /stats, /model/feed
+	if s.intelligenceHandler != nil {
+		s.intelligenceHandler.RegisterRoutes(s.mux)
+	}
 
 	// Account ledger
 	s.mux.HandleFunc("/api/v1/accounts/", s.handleAccountBalance)

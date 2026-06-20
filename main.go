@@ -225,6 +225,12 @@ func main() {
 	// Wire PoI engine into API server (auto-registers agents as validators)
 	server.SetPoiEngine(poiEngine)
 
+	// Intelligence data layer (BadgerDB-backed, 8 new endpoints)
+	if err := server.SetIntelligence("/var/lib/alphanode/intelligence"); err != nil {
+		log.Fatalf("❌ Intelligence layer: %v", err)
+	}
+	log.Printf("🧠 Intelligence data layer initialized")
+
 	// Discord webhook (optional — broadcasts agent registrations to a Discord channel)
 	if webhookURL := os.Getenv("DISCORD_WEBHOOK_URL"); webhookURL != "" {
 		server.SetDiscordWebhook(webhookURL)

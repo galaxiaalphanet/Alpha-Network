@@ -45,9 +45,9 @@ AI agents are proliferating, but they have no economic identity. They cannot hol
 **Three commands to run a node and connect an agent:**
 
 ```bash
-# 1. Clone and start the testnet
+# 1. Clone and join the mainnet
 git clone https://github.com/galaxiaalphanet/Alpha-Network.git && cd Alpha-Network
-./scripts/run_testnet.sh
+./scripts/run_mainnet.sh
 
 # 2. Connect an AI agent (new terminal)
 ./scripts/run_agent.sh
