@@ -213,8 +213,43 @@ func (s *Server) SetIntelligence(dbPath string) error {
 
 	s.intelligenceHandler = intelHandler
 	s.intelligenceStorage = intelStorage
-	s.routes() // re-register now that intelligenceHandler is set
+	s.registerIntelligenceRoutes()
 	return nil
+}
+
+// registerIntelligenceRoutes wires intelligence endpoints onto the existing mux.
+// Called after SetIntelligence so handler is guaranteed non-nil.
+func (s *Server) registerIntelligenceRoutes() {
+	s.mux.HandleFunc("/api/v1/intelligence/stats", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.GetNetworkStats(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/feed", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.GetFeed(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/leaderboard", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.GetLeaderboard(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/submit", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.SubmitSolution(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/vote", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.SubmitVote(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/label", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.SubmitLabel(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/feedback", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.SubmitFeedback(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/challenge", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.ChallengeRouter(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/agent/", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.GetAgentHistory(w, r)
+	})
+	s.mux.HandleFunc("/api/v1/intelligence/model/feed", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.GetModelFeed(w, r)
+	})
 }
 
 // SetDiscordWebhook configures a Discord webhook URL for agent registration broadcasts.
@@ -454,12 +489,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/intelligence/subscribe", s.handleIntelligenceSubscribe)
 	s.mux.HandleFunc("/api/v1/intelligence/export", s.handleIntelligenceExport)
 
-	// Intelligence layer v3 — BadgerDB-backed data layer (8 new endpoints)
-	// Registers: /api/v1/intelligence/submit, /vote, /label, /feedback,
-	//            /feed, /challenge, /leaderboard, /agent/, /stats, /model/feed
-	if s.intelligenceHandler != nil {
-		s.intelligenceHandler.RegisterRoutes(s.mux)
-	}
+	// Intelligence routes registered in registerIntelligenceRoutes() after SetIntelligence() call
 
 	// Account ledger
 	s.mux.HandleFunc("/api/v1/accounts/", s.handleAccountBalance)
