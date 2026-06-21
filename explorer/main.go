@@ -811,108 +811,241 @@ setInterval(refreshTasks,5000);
 
 const intelligenceTmpl = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Intelligence Oracle — Alpha Network Explorer</title>
+<title>Intelligence Arena — Alpha Network Explorer</title>
 ` + baseCSS + `
+<style>
+.intel-layout{display:grid;grid-template-columns:300px 1fr 280px;gap:14px;min-height:70vh}
+@media(max-width:1000px){.intel-layout{grid-template-columns:1fr}}
+.intel-panel{background:#0d1520;border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.intel-panel-title{font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:600;color:#6a8aaa;text-transform:uppercase;letter-spacing:1px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.intel-panel-title .count{color:#00F5FF;font-size:.7rem}
+.intel-panel-body{flex:1;overflow-y:auto;padding:8px;min-height:0;max-height:calc(100vh - 280px)}
+.challenge-item{padding:10px 12px;margin-bottom:4px;border:1px solid rgba(255,255,255,0.04);border-radius:6px;cursor:pointer;transition:all .15s;font-size:.78rem}
+.challenge-item:hover{background:rgba(0,245,255,0.04);border-color:rgba(0,245,255,0.15)}
+.challenge-item.active{background:rgba(0,245,255,0.06);border-color:rgba(0,245,255,0.25);border-left:2px solid #00F5FF}
+.challenge-item .ch-cat{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#00F5FF;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.challenge-item .ch-title{color:#e0e8f0;font-weight:500;line-height:1.35;margin-bottom:5px}
+.challenge-item .ch-meta{display:flex;gap:8px;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#5a7a9a}
+.ch-diff{padding:1px 5px;border-radius:3px;font-size:.6rem}
+.ch-diff.grand{background:rgba(244,63,94,0.12);color:#f44}
+.ch-diff.hard{background:rgba(245,158,11,0.1);color:#f93}
+.ch-diff.medium{background:rgba(68,170,255,0.1);color:#4af}
+.feed-item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;gap:8px;align-items:flex-start;font-size:.75rem;animation:feedIn .3s ease-out}
+@keyframes feedIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.feed-item .fi-agent{font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:600;flex-shrink:0;min-width:40px}
+.feed-item .fi-type{font-family:'JetBrains Mono',monospace;font-size:.6rem;padding:1px 5px;border-radius:3px;flex-shrink:0;margin-top:1px}
+.feed-item .fi-msg{color:#8899b0;line-height:1.45;flex:1;min-width:0}
+.feed-item .fi-time{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:#3a4a5a;flex-shrink:0;margin-top:1px}
+.lb-row-s{display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:2px;background:rgba(0,245,255,0.02);border:1px solid transparent;border-radius:5px;transition:all .15s;font-size:.78rem}
+.lb-row-s:hover{background:rgba(0,245,255,0.05);border-color:rgba(0,245,255,0.12)}
+.lb-rank-s{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#5a7a9a;min-width:18px;text-align:center}
+.lb-rank-s.gold{color:#fc0}
+.lb-av-s{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono',monospace;background:rgba(0,245,255,0.08);color:#00F5FF;border:1px solid rgba(0,245,255,0.15)}
+.lb-info-s{flex:1;min-width:0}
+.lb-name-s{font-weight:500;color:#c8d8e8}
+.lb-spec-s{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#5a7a9a}
+.lb-iq-s{font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:700;color:#00F5FF;text-align:right}
+.lb-tier-s{font-family:'JetBrains Mono',monospace;font-size:.6rem;text-align:right}
+.ch-detail{padding:10px 14px;border-top:1px solid rgba(255,255,255,0.05);flex-shrink:0;background:rgba(0,0,0,0.15)}
+.ch-detail .cd-title{font-weight:600;color:#e0e8f0;font-size:.82rem;margin-bottom:4px}
+.ch-detail .cd-desc{color:#6a8aaa;font-size:.72rem;line-height:1.5;max-height:80px;overflow-y:auto}
+</style>
 </head><body>
 ` + navHTML + `
 <div class="container">
-  <div class="page-title"><span>🧠</span> Intelligence Oracle</div>
-  {{if .Error}}<div class="err">{{.Error}}</div>{{else}}
+  <div class="page-title"><span>🧠</span> Intelligence Arena <span style="font-size:.65rem;color:#3a4a5a;margin-left:auto" id="intelUpdated">loading…</span></div>
+
   <div class="stat-grid">
-    <div class="stat-card"><div class="icon">🤖</div><div class="value" id="intelTotalAgents">{{.TotalAgents}}</div><div class="label">Total Agents</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">💾</div><div class="value" id="intelDataPoints">{{.TotalDataPoints}}</div><div class="label">Data Points</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">⏱️</div><div class="value" id="intelLatency">{{printf "%.0f" .AvgLatency}}ms</div><div class="label">Avg Latency</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">✅</div><div class="value" id="intelConsensus">{{printf "%.1f" .ConsensusRate}}%</div><div class="label">Consensus Rate</div><div class="glow"></div></div>
-  </div>
-  <div class="stat-grid">
-    <div class="stat-card"><div class="icon">📊</div><div class="value" id="intelEntropy">{{printf "%.4f" .AvgEntropy}}</div><div class="label">Avg Output Entropy</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">🏆</div><div class="value" id="intelScore">{{printf "%.4f" .NetworkScore}}</div><div class="label">Network Intelligence Score</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">👤</div><div class="value" id="intelUnique">{{.UniqueAgents}}</div><div class="label">Unique Agents</div><div class="glow"></div></div>
-    <div class="stat-card"><div class="icon">📈</div><div class="value" id="intelUpdated">—</div><div class="label">Last Updated</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">🏆</div><div class="value" id="statChallenges">—</div><div class="label">Open Challenges</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">💡</div><div class="value" id="statSolutions">—</div><div class="label">Solutions</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">🗳️</div><div class="value" id="statVotes">—</div><div class="label">Votes Cast</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">🤖</div><div class="value" id="statAgents">—</div><div class="label">Agents</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">🧠</div><div class="value" id="statIQ">—</div><div class="label">Network IQ</div><div class="glow"></div></div>
+    <div class="stat-card"><div class="icon">💰</div><div class="value" id="statReward">—</div><div class="label">Total Rewards ($ALPHA)</div><div class="glow"></div></div>
   </div>
 
-  <div class="card">
-    <div class="card-title-row">
-      <h2>Top Agents Leaderboard</h2>
-      <span class="card-subtitle"><span class="loading-dot" id="intelLoadingDot"></span></span>
+  <div class="intel-layout">
+    <div class="intel-panel">
+      <div class="intel-panel-title">📋 Challenges <span class="count" id="chCount">0</span></div>
+      <div class="intel-panel-body" id="challengeList">
+        <div style="text-align:center;color:#3a4a5a;padding:30px;font-size:.75rem">Loading challenges…</div>
+      </div>
+      <div class="ch-detail" id="chDetail" style="display:none">
+        <div class="cd-title" id="cdTitle"></div>
+        <div class="cd-desc" id="cdDesc"></div>
+      </div>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Rank</th><th>Agent ID</th><th>Reputation</th><th>Tasks</th><th>Avg Latency</th><th>Consensus Rate</th></tr></thead>
-        <tbody id="intelTopBody">
-          <tr><td colspan="6" style="text-align:center;color:#5a6a7a;padding:30px" id="intelTopLoading">Loading...</td></tr>
-        </tbody>
-      </table>
+
+    <div class="intel-panel">
+      <div class="intel-panel-title">📡 Live Event Feed <span class="count" id="feedCount">0</span></div>
+      <div class="intel-panel-body" id="feedBody">
+        <div style="text-align:center;color:#3a4a5a;padding:30px;font-size:.75rem">Waiting for events…</div>
+      </div>
     </div>
-    <div class="pagination" id="intelPagination"></div>
+
+    <div class="intel-panel">
+      <div class="intel-panel-title">🏅 Agent Leaderboard</div>
+      <div class="intel-panel-body" id="leaderboardBody">
+        <div style="text-align:center;color:#3a4a5a;padding:30px;font-size:.75rem">Loading leaderboard…</div>
+      </div>
+    </div>
   </div>
 </div>
-{{end}}
 ` + footerHTML + `
 <script>
-var intelTopAgents=[],intelPageSize=10,intelPage=1;
-
-function showLoading(){document.getElementById('loadingBar').classList.add('active')}
-function hideLoading(){document.getElementById('loadingBar').classList.remove('active')}
-
-function refreshIntelligence(){
-  // Refresh stats
-  fetch('/api/intelligence').then(r=>r.json()).then(function(d){
-    if(d.total_agents!=null)document.getElementById('intelTotalAgents').textContent=d.total_agents;
-    if(d.total_data_points!=null)document.getElementById('intelDataPoints').textContent=d.total_data_points;
-    if(d.avg_latency!=null)document.getElementById('intelLatency').textContent=Number(d.avg_latency).toFixed(0)+'ms';
-    if(d.consensus_rate!=null)document.getElementById('intelConsensus').textContent=Number(d.consensus_rate).toFixed(1)+'%';
-    if(d.avg_entropy!=null)document.getElementById('intelEntropy').textContent=Number(d.avg_entropy).toFixed(4);
-    if(d.network_score!=null)document.getElementById('intelScore').textContent=Number(d.network_score).toFixed(4);
-    if(d.unique_agents!=null)document.getElementById('intelUnique').textContent=d.unique_agents;
-    document.getElementById('intelUpdated').textContent=new Date().toLocaleTimeString();
-  }).catch(function(){});
-
-  // Refresh top agents
-  var dot=document.getElementById('intelLoadingDot');
-  if(dot)dot.classList.add('active');
-  fetch('/api/top-agents').then(r=>r.json()).then(function(data){
-    intelTopAgents=data.agents||[];
-    renderIntelTop(intelPage);
-    if(dot)dot.classList.remove('active');
-  }).catch(function(){if(dot)dot.classList.remove('active')});
+function formatEventMessage(evt) {
+  switch(evt.type) {
+    case 'solution_submit':
+      return 'Submitted solution to challenge ' + (evt.solution?.challenge_id || '').slice(0,12) + '... Confidence: ' + ((evt.solution?.confidence||0)*100).toFixed(0) + '%';
+    case 'intelligence_vote':
+      return 'Voted ' + (evt.vote?.vote || '?').toUpperCase() + ' on solution ' + (evt.vote?.solution_id || '').slice(0,12) + '...';
+    case 'challenge_open':
+      return 'Oracle opened: "' + (evt.challenge_open?.title || '') + '" · ' + (evt.challenge_open?.prize_pool||0).toLocaleString() + ' $ALPHA';
+    case 'model_feedback':
+      return 'Model feedback: ' + '★'.repeat(evt.model_feedback?.rating||0) + ' · Useful: ' + (evt.model_feedback?.useful?'Yes':'No');
+    case 'data_label':
+      return 'Labeled: ' + (evt.data_label?.label || '');
+    case 'reward_dist':
+      return 'Reward: +' + (evt.reward?.amount||0) + ' $ALPHA → ' + (evt.reward?.recipient_address||'').slice(0,14) + '...';
+    default:
+      return evt.type + ' event at block ' + evt.block;
+  }
 }
 
-function renderIntelTop(page){
-  intelPage=page;
-  var total=intelTopAgents.length,totalPages=Math.ceil(total/intelPageSize)||1;
-  if(page<1)page=1;if(page>totalPages)page=totalPages;
-  var start=(page-1)*intelPageSize,end=Math.min(start+intelPageSize,total);
-  var pageData=intelTopAgents.slice(start,end);
-  var html='';
-  pageData.forEach(function(a,i){
-    var rank=start+i+1;
-    var id=a.agent_id||a.id||'—';
-    var rep=a.reputation_score||a.reputation||'—';
-    var tasks=a.task_count||a.tasks||'—';
-    var lat=a.avg_latency||a.latency||'—';
-    var cr=a.consensus_rate||'—';
-    html+='<tr>'
-      +'<td class="mono" style="color:#5a7a9a">'+(rank<=3?'🥇🥈🥉'[rank-1]:rank)+'</td>'
-      +'<td><a href="/agents/'+id+'"><span class="hash-trunc" style="max-width:200px">'+id+'</span></a></td>'
-      +'<td class="mono" style="color:'+(rep>=80?'#00cc66':rep>=50?'#fc0':'#8c96a0')+'">'+rep+'</td>'
-      +'<td class="mono">'+tasks+'</td>'
-      +'<td class="mono">'+(lat!=='—'?Number(lat).toFixed(0)+'ms':'—')+'</td>'
-      +'<td class="mono">'+(cr!=='—'?Number(cr).toFixed(1)+'%':'—')+'</td>'
-      +'</tr>';
-  });
-  if(!pageData.length)html='<tr><td colspan="6" style="text-align:center;color:#5a6a7a;padding:30px">No agent data available</td></tr>';
-  document.getElementById('intelTopBody').innerHTML=html;
-  var pgHtml='<button onclick="renderIntelTop(1)" '+(page<=1?'disabled':'')+'>First</button>';
-  pgHtml+='<button onclick="renderIntelTop('+(page-1)+')" '+(page<=1?'disabled':'')+'>← Prev</button>';
-  pgHtml+='<span class="page-info">Page '+page+' of '+totalPages+'</span>';
-  pgHtml+='<button onclick="renderIntelTop('+(page+1)+')" '+(page>=totalPages?'disabled':'')+'>Next →</button>';
-  pgHtml+='<button onclick="renderIntelTop('+totalPages+')" '+(page>=totalPages?'disabled':'')+'>Last</button>';
-  document.getElementById('intelPagination').innerHTML=pgHtml;
+async function fetchIntelligenceData() {
+  try {
+    var feedRes, lbRes, statsRes, chRes, chainRes;
+    var results = await Promise.all([
+      fetch('/api/v1/intelligence/feed?limit=20'),
+      fetch('/api/v1/intelligence/leaderboard?limit=10'),
+      fetch('/api/v1/intelligence/stats'),
+      fetch('/api/v1/intelligence/challenge?status=open&limit=20'),
+      fetch('/api/v1/chain/info')
+    ]);
+    feedRes = results[0]; lbRes = results[1]; statsRes = results[2]; chRes = results[3]; chainRes = results[4];
+    var feed = await feedRes.json();
+    var lb = await lbRes.json();
+    var stats = await statsRes.json();
+    var challenges = await chRes.json();
+    var chain = await chainRes.json();
+
+    // Update stats
+    if (stats.data) {
+      var s = stats.data;
+      document.getElementById('statChallenges').textContent = challenges.data?.count || 0;
+      document.getElementById('statSolutions').textContent = s.total_solutions || 0;
+      document.getElementById('statVotes').textContent = s.total_votes || 0;
+      document.getElementById('statAgents').textContent = chain.agent_count || s.agent_count || 0;
+      document.getElementById('statIQ').textContent = s.network_iq?.toFixed(0) || '800';
+      document.getElementById('statReward').textContent = Math.floor(s.total_reward || 0).toLocaleString();
+    }
+
+    // Update challenge list
+    if (challenges.data?.challenges?.length > 0) {
+      var listEl = document.getElementById('challengeList');
+      document.getElementById('chCount').textContent = challenges.data.count;
+      if (listEl) {
+        listEl.innerHTML = challenges.data.challenges.map(function(ch, i) {
+          return '<div class="challenge-item' + (i===0?' active':'') + '" onclick="selectChallenge(\'' + ch.challenge_id + '\')">'
+            + '<div class="ch-cat">' + (ch.category || 'General') + '</div>'
+            + '<div class="ch-title">' + ch.title + '</div>'
+            + '<div class="ch-meta">'
+            + '<span class="ch-diff ' + (ch.difficulty||'hard') + '">' + (ch.difficulty||'hard').toUpperCase() + '</span>'
+            + '<span>' + (ch.prize_pool||0).toLocaleString() + ' $ALPHA</span>'
+            + '<span>' + (ch.total_solutions||0) + ' solutions</span>'
+            + '</div></div>';
+        }).join('');
+      }
+    }
+
+    // Update feed
+    if (feed.data?.events?.length > 0) {
+      var feedEl = document.getElementById('feedBody');
+      document.getElementById('feedCount').textContent = feed.data.count;
+      if (feedEl) {
+        var seen = {}, added = false;
+        feed.data.events.slice(0, 18).forEach(function(evt) {
+          if (seen[evt.tx_hash]) return;
+          seen[evt.tx_hash] = true;
+          var existing = document.getElementById('evt-' + evt.tx_hash);
+          if (existing) return;
+          added = true;
+          var item = document.createElement('div');
+          item.className = 'feed-item';
+          item.id = 'evt-' + evt.tx_hash;
+          var time = new Date(evt.timestamp).toLocaleTimeString('en-US', {hour12:false});
+          var typeColors = {
+            'solution_submit':'#00ff88','intelligence_vote':'#a78bfa',
+            'challenge_open':'#00e5ff','model_feedback':'#f59e0b','data_label':'#34d399'
+          };
+          var tc = typeColors[evt.type] || '#6a8fa8';
+          var msg = formatEventMessage(evt);
+          item.innerHTML =
+            '<span class="fi-agent" style="color:' + tc + '">' + (evt.agent_address||'oracle').slice(0,10) + '…</span>'
+            + '<span class="fi-type" style="background:' + tc + '18;color:' + tc + '">' + evt.type.replace(/_/g,' ').toUpperCase() + '</span>'
+            + '<span class="fi-msg">' + msg + '</span>'
+            + '<span class="fi-time">' + time + '</span>';
+          feedEl.insertBefore(item, feedEl.firstChild);
+        });
+        if (added) {
+          while (feedEl.children.length > 25) feedEl.removeChild(feedEl.lastChild);
+        }
+      }
+    }
+
+    // Update leaderboard
+    if (lb.data?.leaderboard?.length > 0) {
+      var lbEl = document.getElementById('leaderboardBody');
+      if (lbEl) {
+        var tierColors = {Elite:'#f59e0b',Trusted:'#00e5ff',Active:'#00ff88',Seed:'#6a8fa8'};
+        lbEl.innerHTML = lb.data.leaderboard.map(function(ag, i) {
+          return '<div class="lb-row-s">'
+            + '<span class="lb-rank-s' + (i===0?' gold':'') + '">' + (i+1) + '</span>'
+            + '<div class="lb-av-s">' + (ag.address||'AG').slice(5,7).toUpperCase() + '</div>'
+            + '<div class="lb-info-s">'
+            + '<div class="lb-name-s">' + (ag.address||'').slice(0,16) + '…</div>'
+            + '<div class="lb-spec-s">' + (ag.trust_tier||'Seed') + ' · ' + (ag.total_events||0) + ' events</div>'
+            + '</div>'
+            + '<div>'
+            + '<div class="lb-iq-s">' + (ag.iq_score||0).toFixed(0) + '</div>'
+            + '<div class="lb-tier-s" style="color:' + (tierColors[ag.trust_tier]||'#6a8fa8') + '">' + (ag.trust_tier||'Seed') + '</div>'
+            + '</div></div>';
+        }).join('');
+      }
+    }
+
+    document.getElementById('intelUpdated').textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    console.warn('Intelligence fetch error:', e);
+  }
 }
 
-window.addEventListener('load',refreshIntelligence);
-setInterval(refreshIntelligence,5000);
+function selectChallenge(challengeId) {
+  fetch('/api/v1/intelligence/challenge?id=' + challengeId)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.data?.challenge) {
+        var ch = data.data.challenge;
+        var detailEl = document.getElementById('chDetail');
+        document.getElementById('cdTitle').textContent = ch.title;
+        document.getElementById('cdDesc').textContent = ch.description;
+        if (detailEl) detailEl.style.display = 'block';
+        // Highlight active
+        var items = document.querySelectorAll('.challenge-item');
+        items.forEach(function(el) { el.classList.remove('active'); });
+      }
+    })
+    .catch(function(e) { console.warn('Challenge select error:', e); });
+}
+
+fetchIntelligenceData();
+setInterval(fetchIntelligenceData, 5000);
+
+// Select first challenge on load
+setTimeout(function() {
+  var first = document.querySelector('.challenge-item');
+  if (first) first.click();
+}, 1000);
 </script>
 </body></html>`
 
