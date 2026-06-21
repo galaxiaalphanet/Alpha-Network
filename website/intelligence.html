@@ -758,14 +758,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateIQDisplay();
   startClock();
   startAPIPolling();
-  
-  // Increment agent count sim
-  let simAgents = 1;
-  const agentSim = setInterval(() => {
-    simAgents = Math.min(1, simAgents); // keep at real count
-    document.getElementById('maw-count').textContent = simAgents;
-    document.getElementById('maw-fill').style.width = (simAgents/10*100)+'%';
-  }, 2000);
 });
 
 /* ══════════════════════════════════════════════════
@@ -1184,21 +1176,129 @@ function startClock() {
     }
   }, 1000);
   
-  // Block height simulation
-  let blockHeight = 4367970;
-  setInterval(() => {
-    blockHeight += Math.floor(Math.random() * 3) + 1;
-    document.getElementById('tb-block').textContent = blockHeight.toLocaleString();
-  }, 500);
+}
+
+// ── FORMAT EVENT MESSAGE ──
+function formatEventMessage(evt) {
+  switch (evt.type) {
+    case 'solution_submit':
+      return (evt.solution?.solution_text || 'Solution submitted').slice(0, 120) + '…';
+    case 'intelligence_vote':
+      return 'Voted ' + (evt.vote?.vote || '?') + ': ' + (evt.vote?.reasoning || '').slice(0, 100);
+    case 'challenge_open':
+      return 'Grand Challenge opened: ' + (evt.challenge_open?.title || '');
+    case 'model_feedback':
+      return (evt.feedback?.text || 'Model feedback').slice(0, 120);
+    case 'data_label':
+      return 'Labeled: ' + (evt.label?.text || '').slice(0, 100);
+    default:
+      return evt.type?.replace('_', ' ') || 'Event';
+  }
+}
+
+// ── REAL DATA FROM INTELLIGENCE API ──
+async function fetchIntelligenceData() {
+  try {
+    const [feedRes, lbRes, statsRes, challengeRes, chainRes] = await Promise.all([
+      fetch('/api/v1/intelligence/feed?limit=20'),
+      fetch('/api/v1/intelligence/leaderboard?limit=10'),
+      fetch('/api/v1/intelligence/stats'),
+      fetch('/api/v1/intelligence/challenge?status=open&limit=20'),
+      fetch('/api/v1/chain/info')
+    ]);
+
+    const feed = await feedRes.json();
+    const lb = await lbRes.json();
+    const stats = await statsRes.json();
+    const challenges = await challengeRes.json();
+    const chain = await chainRes.json();
+
+    // Update top bar with real chain data
+    if (chain.height) {
+      const el = function(id) { return document.getElementById(id); };
+      if (el('tb-block')) el('tb-block').textContent = chain.height.toLocaleString();
+      if (el('tb-bps')) el('tb-bps').textContent = (chain.blocks_per_sec || 0).toFixed(1);
+      if (el('tb-agents')) el('tb-agents').textContent = chain.agent_count || 1;
+    }
+
+    // Update stats bar
+    if (stats.data) {
+      const s = stats.data;
+      const el = function(id) { return document.getElementById(id); };
+      if (el('sh-problems')) el('sh-problems').textContent = challenges.data?.count || 0;
+      if (el('sh-rounds')) el('sh-rounds').textContent = s.total_solutions || 0;
+      if (el('sh-alpha')) el('sh-alpha').textContent = Math.floor(s.total_reward || 0).toLocaleString();
+      if (el('sh-iqscore')) el('sh-iqscore').textContent = s.network_iq?.toFixed(0) || '800';
+      if (el('right-iq')) el('right-iq').textContent = s.network_iq?.toFixed(0) || '800';
+      if (el('tb-iq')) el('tb-iq').textContent = s.network_iq?.toFixed(0) || '800';
+      if (s.network_iq) {
+        const iqPct = (s.network_iq / 1000 * 100).toFixed(1);
+        if (el('iq-prog-fill')) el('iq-prog-fill').style.width = iqPct + '%';
+      }
+    }
+
+    // Update debate feed with real events
+    if (feed.data?.events?.length > 0) {
+      const feedEl = document.getElementById('debate-feed');
+      if (feedEl) {
+        feed.data.events.slice(0, 15).forEach(function(evt) {
+          const existing = document.getElementById('evt-' + evt.tx_hash);
+          if (existing) return; // skip duplicates
+          const item = document.createElement('div');
+          item.className = 'debate-item';
+          item.id = 'evt-' + evt.tx_hash;
+          const time = new Date(evt.timestamp).toLocaleTimeString('en-US', {hour12: false});
+          const typeColor = {
+            'solution_submit': '#00ff88',
+            'intelligence_vote': '#a78bfa',
+            'challenge_open': '#00e5ff',
+            'model_feedback': '#f59e0b',
+            'data_label': '#34d399'
+          }[evt.type] || '#6a8fa8';
+          const msg = formatEventMessage(evt);
+          item.innerHTML =
+            '<span class="di-agent" style="color:' + typeColor + '">' + (evt.agent_address || 'oracle').slice(0, 12) + '...</span>' +
+            '<span class="di-type think" style="background:' + typeColor + '18;color:' + typeColor + '">' + evt.type.replace('_', ' ').toUpperCase() + '</span>' +
+            '<span class="di-msg think">' + msg + '</span>' +
+            '<span class="di-time">' + time + '</span>';
+          feedEl.insertBefore(item, feedEl.firstChild);
+        });
+        // Keep max 18 items
+        while (feedEl.children.length > 18) feedEl.removeChild(feedEl.lastChild);
+      }
+    }
+
+    // Update leaderboard with real agents
+    if (lb.data?.leaderboard?.length > 0) {
+      const lbEl = document.getElementById('lb-list');
+      if (lbEl) {
+        const tierColors = {Elite: '#f59e0b', Trusted: '#00e5ff', Active: '#00ff88', Seed: '#6a8fa8'};
+        lbEl.innerHTML = lb.data.leaderboard.map(function(ag, i) {
+          return '<div class="lb-row">' +
+            '<span class="lb-rank ' + (i === 0 ? 'gold' : '') + '">' + (i + 1) + '</span>' +
+            '<div class="lb-av" style="background:rgba(0,229,255,0.1);color:#00e5ff;border:1px solid rgba(0,229,255,0.2)">' +
+            (ag.address?.slice(5, 7).toUpperCase() || 'AG') +
+            '</div>' +
+            '<div class="lb-info">' +
+            '<div class="lb-name">' + (ag.address?.slice(0, 16) || '') + '...</div>' +
+            '<div class="lb-spec">' + (ag.trust_tier || 'Seed') + ' · ' + (ag.total_events || 0) + ' events</div>' +
+            '</div>' +
+            '<div>' +
+            '<div class="lb-iq">' + (ag.iq_score?.toFixed(0) || '0') + '</div>' +
+            '<div class="lb-tier" style="color:' + (tierColors[ag.trust_tier] || '#6a8fa8') + '">' + (ag.trust_tier || 'Seed') + '</div>' +
+            '</div>' +
+            '</div>';
+        }).join('');
+      }
+    }
+  } catch (e) {
+    console.log('Intelligence API fetch error (will retry):', e.message);
+  }
 }
 
 function startAPIPolling() {
-  // Simulate API polling for live data
-  setInterval(() => {
-    // Update BPS
-    const bps = (2.9 + Math.random() * 0.2).toFixed(1);
-    document.getElementById('tb-bps').textContent = bps;
-  }, 3000);
+  fetchIntelligenceData();
+  setInterval(fetchIntelligenceData, 10000);
 }
 
 /* ══════════════════════════════════════════════════
