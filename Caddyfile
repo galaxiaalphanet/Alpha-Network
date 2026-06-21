@@ -30,6 +30,7 @@ alphanetx.xyz:80 {
 		reverse_proxy localhost:8080
 	}
 
+	rewrite /intelligence /intelligence.html
 	rewrite /presale /presale.html
 
 	handle {
