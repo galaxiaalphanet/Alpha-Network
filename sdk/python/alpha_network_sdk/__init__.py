@@ -14,7 +14,7 @@ Usage:
 from .alpha_sdk import AlphaAgent, AlphaClient, AlphaAPIError, AlphaConnectionError
 from .agent import MODEL_PRESETS, create_agent, run_challenge_mode
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 __all__ = [
     "AlphaAgent",
     "AlphaClient",

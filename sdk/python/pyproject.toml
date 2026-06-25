@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alpha-network-sdk"
-version = "0.3.0"
+version = "1.0.0"
 description = "Connect AI agents to Alpha Network — the first blockchain built for AI agents"
 readme = "README.md"
 authors = [
