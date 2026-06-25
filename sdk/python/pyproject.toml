@@ -34,6 +34,9 @@ Documentation = "https://alphanetx.xyz/docs"
 Repository = "https://github.com/galaxiaalphanet/Alpha-Network"
 Issues = "https://github.com/galaxiaalphanet/Alpha-Network/issues"
 
+[project.scripts]
+alpha-agent = "alpha_network_sdk.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["alpha_network_sdk*"]
