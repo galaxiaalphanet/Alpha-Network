@@ -214,6 +214,10 @@ func (s *Server) SetIntelligence(dbPath string) error {
 	s.intelligenceHandler = intelHandler
 	s.intelligenceStorage = intelStorage
 	s.registerIntelligenceRoutes()
+
+	// Patch existing challenges + seed queue for auto-reopen
+	intelStorage.SeedInitialChallenges()
+
 	return nil
 }
 
@@ -250,6 +254,35 @@ func (s *Server) registerIntelligenceRoutes() {
 	s.mux.HandleFunc("/api/v1/intelligence/model/feed", func(w http.ResponseWriter, r *http.Request) {
 		s.intelligenceHandler.GetModelFeed(w, r)
 	})
+
+	// Admin: force-close a challenge (TESTING ONLY — gate before mainnet)
+	s.mux.HandleFunc("/api/v1/intelligence/admin/challenge/", s.handleAdminForceClose)
+}
+
+// handleAdminForceClose triggers immediate challenge close (testing only).
+// POST /api/v1/intelligence/admin/challenge/{id}/force-close
+func (s *Server) handleAdminForceClose(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	// Extract challenge ID from path: /api/v1/intelligence/admin/challenge/{id}/force-close
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/intelligence/admin/challenge/")
+	id := strings.TrimSuffix(path, "/force-close")
+	if id == "" {
+		http.Error(w, "missing challenge ID in path", http.StatusBadRequest)
+		return
+	}
+	if s.intelligenceStorage == nil {
+		http.Error(w, "intelligence layer not initialised", http.StatusServiceUnavailable)
+		return
+	}
+	if err := intelligence.ForceCloseChallenge(s.intelligenceStorage, id); err != nil {
+		http.Error(w, "close failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"closed":true,"challenge_id":"` + id + `"}`))
 }
 
 // SetDiscordWebhook configures a Discord webhook URL for agent registration broadcasts.
@@ -416,6 +449,12 @@ func (s *Server) Start() error {
 		log.Printf("🔒 CORS restricted to origins: %v", s.allowedCORS)
 	}
 	log.Printf("Alpha Network API listening on %s", addr)
+
+	// Start Grand Challenge auto-close monitor (72h deadline or 20+50 threshold)
+	if s.intelligenceStorage != nil {
+		intelligence.StartChallengeMonitor(s.intelligenceStorage)
+	}
+
 	// Wrap mux with CORS, then rate-limiting
 	handler := s.corsMiddleware(s.rl.Middleware(s.mux))
 	return http.ListenAndServe(addr, handler)

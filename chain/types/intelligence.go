@@ -97,6 +97,7 @@ type RewardData struct {
 	Reason           string  `json:"reason"`       // "task_completion" | "challenge_win" | "data_label"
 	ReferenceID      string  `json:"reference_id"` // task_id, solution_id, etc.
 	Rank             int     `json:"rank,omitempty"` // 1st, 2nd, 3rd for challenges
+	ChallengeID      string  `json:"challenge_id,omitempty"` // for Grand Challenge rewards
 }
 
 // ModelFeedbackData — feedback on Alpha Model playground output
@@ -129,6 +130,8 @@ type ChallengeCloseData struct {
 	TotalSolutions int      `json:"total_solutions"`
 	TotalVotes     int      `json:"total_votes"`
 	NetworkIQDelta float64  `json:"network_iq_delta"` // how much IQ increased
+	ClosedAt       int64    `json:"closed_at"`        // Unix timestamp of close
+	Reason         string   `json:"reason"`           // "deadline_reached" | "threshold_met"
 }
 
 // ─────────────────────────────────────────────

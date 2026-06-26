@@ -92,7 +92,7 @@ func (h *Handler) SubmitSolution(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "challenge not found: "+req.ChallengeID, http.StatusNotFound)
 		return
 	}
-	if ch.Status != "open" {
+	if ch.Status != types.ChallengeStatusOpen {
 		jsonError(w, "challenge is closed", http.StatusConflict)
 		return
 	}
@@ -474,15 +474,15 @@ func (h *Handler) CreateChallenge(w http.ResponseWriter, r *http.Request) {
 	deadline := now.Add(time.Duration(req.DurationHours) * time.Hour)
 	txHash := generateTxHash()
 
-	ch := &ChallengeRecord{
-		ChallengeID:  challengeID,
+	ch := &types.ChallengeRecord{
+		ID:           challengeID,
 		Title:        req.Title,
 		Description:  req.Description,
 		Category:     req.Category,
 		Difficulty:   req.Difficulty,
 		PrizePool:    req.PrizePool,
-		Status:       "open",
-		CreatedAt:    now,
+		Status:       types.ChallengeStatusOpen,
+		CreatedAt:    now.Unix(),
 		DeadlineUnix: deadline.Unix(),
 		MinAgents:    req.MinAgents,
 	}

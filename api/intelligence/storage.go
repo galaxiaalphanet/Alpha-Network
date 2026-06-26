@@ -172,37 +172,18 @@ func (s *Storage) updateAgentStats(txn *badger.Txn, event *types.IntelligenceEve
 	return txn.Set(statsKey, data)
 }
 
-// ─────────────────────────────────────────────
-// ChallengeRecord — stored state for a challenge
-// ─────────────────────────────────────────────
-type ChallengeRecord struct {
-	ChallengeID    string    `json:"challenge_id"`
-	Title          string    `json:"title"`
-	Description    string    `json:"description"`
-	Category       string    `json:"category"`
-	Difficulty     string    `json:"difficulty"`
-	PrizePool      float64   `json:"prize_pool"`
-	Status         string    `json:"status"` // "open" | "closed"
-	CreatedAt      time.Time `json:"created_at"`
-	DeadlineUnix   int64     `json:"deadline_unix"`
-	MinAgents      int       `json:"min_agents"`
-	TotalSolutions int       `json:"total_solutions"`
-	TotalVotes     int       `json:"total_votes"`
-	WinnerIDs      []string  `json:"winner_ids,omitempty"`
-}
-
-func (s *Storage) StoreChallenge(ch *ChallengeRecord) error {
+func (s *Storage) StoreChallenge(ch *types.ChallengeRecord) error {
 	data, err := json.Marshal(ch)
 	if err != nil {
 		return err
 	}
 	return s.db.Update(func(txn *badger.Txn) error {
-		return txn.Set([]byte(prefixChallenge+ch.ChallengeID), data)
+		return txn.Set([]byte(prefixChallenge+ch.ID), data)
 	})
 }
 
-func (s *Storage) GetChallenge(challengeID string) (*ChallengeRecord, error) {
-	var ch ChallengeRecord
+func (s *Storage) GetChallenge(challengeID string) (*types.ChallengeRecord, error) {
+	var ch types.ChallengeRecord
 	err := s.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(prefixChallenge + challengeID))
 		if err != nil {
@@ -218,8 +199,8 @@ func (s *Storage) GetChallenge(challengeID string) (*ChallengeRecord, error) {
 	return &ch, err
 }
 
-func (s *Storage) ListChallenges(status string, limit int) ([]*ChallengeRecord, error) {
-	var challenges []*ChallengeRecord
+func (s *Storage) ListChallenges(status string, limit int) ([]*types.ChallengeRecord, error) {
+	var challenges []*types.ChallengeRecord
 	err := s.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 20
@@ -229,11 +210,11 @@ func (s *Storage) ListChallenges(status string, limit int) ([]*ChallengeRecord, 
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			if err := item.Value(func(val []byte) error {
-				var ch ChallengeRecord
+				var ch types.ChallengeRecord
 				if err := json.Unmarshal(val, &ch); err != nil {
 					return nil // skip corrupt
 				}
-				if status == "" || ch.Status == status {
+				if status == "" || string(ch.Status) == status {
 					challenges = append(challenges, &ch)
 				}
 				return nil
@@ -248,7 +229,7 @@ func (s *Storage) ListChallenges(status string, limit int) ([]*ChallengeRecord, 
 	})
 	// Sort newest first
 	sort.Slice(challenges, func(i, j int) bool {
-		return challenges[i].CreatedAt.After(challenges[j].CreatedAt)
+		return challenges[i].CreatedAt > challenges[j].CreatedAt
 	})
 	return challenges, err
 }
@@ -400,6 +381,68 @@ func (s *Storage) GetNetworkStats() (map[string]interface{}, error) {
 		"agent_count":     agentCount,
 		"timestamp":       time.Now().UTC(),
 	}, nil
+}
+
+// ─────────────────────────────────────────────
+// Challenge lifecycle methods (used by monitor)
+// ─────────────────────────────────────────────
+
+// GetChallengesByStatus returns all challenges matching the given status.
+func (s *Storage) GetChallengesByStatus(status types.ChallengeStatus) ([]*types.ChallengeRecord, error) {
+	var results []*types.ChallengeRecord
+	prefix := []byte(prefixChallenge)
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = prefix
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			var ch types.ChallengeRecord
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &ch)
+			})
+			if err != nil {
+				continue
+			}
+			if ch.Status == status {
+				results = append(results, &ch)
+			}
+		}
+		return nil
+	})
+	return results, err
+}
+
+// GetChallengeByID returns a single challenge by its ID string.
+func (s *Storage) GetChallengeByID(id string) (*types.ChallengeRecord, error) {
+	return s.GetChallenge(id)
+}
+
+// getSolutionsByPrefix scans BadgerDB for solution records matching a key prefix.
+// Keys are stored as: solution:{challenge_id}:{solution_id}
+func (s *Storage) getSolutionsByPrefix(prefixStr string) ([]*types.SolutionRecord, error) {
+	var results []*types.SolutionRecord
+	prefixBytes := []byte(prefixStr)
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = prefixBytes
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.ValidForPrefix(prefixBytes); it.Next() {
+			item := it.Item()
+			var sol types.SolutionRecord
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &sol)
+			})
+			if err != nil {
+				continue
+			}
+			results = append(results, &sol)
+		}
+		return nil
+	})
+	return results, err
 }
 
 // ─────────────────────────────────────────────
