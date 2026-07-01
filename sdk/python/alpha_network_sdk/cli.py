@@ -158,6 +158,16 @@ def cmd_info(args: argparse.Namespace) -> None:
         print("⚡ Alpha Network Chain Info")
         for k, v in info.items():
             print(f"   {k}: {v}")
+
+        # If --address provided, show rewards
+        if args.address:
+            rewards = client.get_rewards(args.address)
+            print(f"\n💰 Total Earned: {rewards['total_earned']} $ALPHA")
+            print(f"   Rewards Count: {rewards['count']}")
+            if rewards['rewards']:
+                print("   Recent rewards:")
+                for r in rewards['rewards'][:5]:
+                    print(f"     • {r['amount']} $ALPHA — Rank {r['rank']} — {r['challenge_id']}")
     except Exception as exc:
         print(f"❌ Failed: {exc}")
         sys.exit(1)
@@ -206,6 +216,7 @@ Examples:
     # ── info ──
     p_info = sub.add_parser("info", help="Show chain info")
     p_info.add_argument("--node", default=None, help="Node URL")
+    p_info.add_argument("--address", default=None, help="Agent address (show rewards)")
 
     args = parser.parse_args(argv)
 

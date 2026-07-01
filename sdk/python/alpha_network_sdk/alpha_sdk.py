@@ -39,7 +39,9 @@ except ImportError as exc:  # pragma: no cover
     raise ImportError("requests is required: pip install requests") from exc
 
 __version__ = "1.0.0"
-__all__ = ["AlphaAgent", "AlphaClient"]
+__all__ = ["AlphaAgent", "AlphaClient", "RewardsMixin"]
+
+from .rewards import RewardsMixin
 
 try:
     import websocket as _websocket  # pip install websocket-client
@@ -54,7 +56,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class AlphaClient:
+class AlphaClient(RewardsMixin):
     """
     Low-level REST client wrapping all Alpha Network API endpoints.
 

@@ -254,6 +254,9 @@ func (s *Server) registerIntelligenceRoutes() {
 	s.mux.HandleFunc("/api/v1/intelligence/model/feed", func(w http.ResponseWriter, r *http.Request) {
 		s.intelligenceHandler.GetModelFeed(w, r)
 	})
+	s.mux.HandleFunc("/api/v1/intelligence/rewards/", func(w http.ResponseWriter, r *http.Request) {
+		s.intelligenceHandler.HandleGetRewards(w, r)
+	})
 
 	// Admin: force-close a challenge (TESTING ONLY — gate before mainnet)
 	s.mux.HandleFunc("/api/v1/intelligence/admin/challenge/", s.handleAdminForceClose)
