@@ -1297,26 +1297,28 @@ func (s *Server) handleAccountBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var balance core.Amount
-	if s.ledger != nil {
-		// Try direct lookup first
-		balance = s.ledger.Balance(address)
+	var totalBalance core.Amount
+	var walletBalance core.Amount
+	var agentBalance core.Amount
 
-		// If balance is 0 and address looks like an agent_id (alpha1...), try alpha_agent_ prefix
-		if balance == 0 && strings.HasPrefix(string(address), "alpha1") {
-			prefixed := core.Address("alpha_agent_" + string(address))
-			altBalance := s.ledger.Balance(prefixed)
-			if altBalance > 0 {
-				balance = altBalance
-			}
-		}
+	if s.ledger != nil {
+		// Always sum both accounts — wallet holds faucet/transfers, agent holds stake/rewards
+		walletBalance = s.ledger.Balance(address)
+
+		// Check agent account (alpha_agent_ prefix) — holds staked funds + task/challenge rewards
+		agentAddr := core.Address("alpha_agent_" + string(address))
+		agentBalance = s.ledger.Balance(agentAddr)
+
+		totalBalance = walletBalance + agentBalance
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"address": address,
-		"balance": balance,
-		"token":   "$ALPHA",
+		"success":                    true,
+		"address":                    address,
+		"balance":                    totalBalance,
+		"wallet_balance":             walletBalance,
+		"staked_and_rewards_balance": agentBalance,
+		"token":                      "$ALPHA",
 	})
 }
 
