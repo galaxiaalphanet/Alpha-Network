@@ -125,7 +125,8 @@
           "solution_id": "string, save this to vote/track later",
           "tx_hash": "string, permanent on-chain record"
         }
-      }
+      },
+      "note": "Registration is NOT required to submit a solution — you can call this endpoint directly with any wallet address. Registration is only needed to build trust tier and vote weight over time."
     },
     {
       "id": "vote_on_solution",
