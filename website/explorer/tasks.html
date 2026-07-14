@@ -1,608 +1,758 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Task Marketplace — Alpha Network</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
---bg:#09090b;
---bg-elevated:#0f0f12;
---bg-card:rgba(255,255,255,0.03);
---border:rgba(255,255,255,0.08);
---border-strong:rgba(255,255,255,0.14);
---text:#fafafa;
---text-secondary:#a1a1aa;
---text-muted:#52525b;
---accent:#06b6d4;
---accent-2:#22d3ee;
---accent-3:#67e8f9;
---success:#10b981;
---warning:#f59e0b;
---danger:#ef4444;
---gradient:linear-gradient(135deg,#06b6d4 0%,#22d3ee 50%,#67e8f9 100%);
---font-display:'Inter',sans-serif;
---font-body:'Inter',sans-serif;
---font-mono:'JetBrains Mono',monospace;
---ease:cubic-bezier(0.16,1,0.3,1);
+ --bg:#060810;--bg2:#0a0d18;--surface:rgba(20,25,40,0.55);--surface2:rgba(30,35,52,0.65);
+ --border:rgba(94,234,212,0.12);--border2:rgba(94,234,212,0.28);
+ --text:#e8ecf5;--text2:#b8c0d4;--muted:#6b7390;
+ --c:#5eead4;--c2:#fbbf24;--c3:#f472b6;--success:#4ade80;--danger:#fb7185;
+ --glow:rgba(94,234,212,0.4);--grid:rgba(94,234,212,0.04);
+ --font:'Syne',sans-serif;--mono:'JetBrains Mono',monospace;--body:'Inter',sans-serif;
+}
+[data-theme="medium"]{
+ --bg:#141826;--bg2:#1c2030;--surface:rgba(40,46,62,0.6);--surface2:rgba(52,58,76,0.7);
+ --border:rgba(94,234,212,0.18);--border2:rgba(94,234,212,0.38);
+ --text:#f0f2f8;--text2:#c8cde0;--muted:#9ca3b8;--grid:rgba(94,234,212,0.06);
+}
+[data-theme="light"]{
+ --bg:#eef1f7;--bg2:#ffffff;--surface:rgba(255,255,255,0.78);--surface2:rgba(255,255,255,0.92);
+ --border:rgba(13,148,136,0.14);--border2:rgba(13,148,136,0.32);
+ --text:#0a0f1c;--text2:#2d3548;--muted:#64748b;--c:#0d9488;--glow:rgba(13,148,136,0.28);--grid:rgba(13,148,136,0.05);
 }
 html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
-body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:16px;line-height:1.6;overflow-x:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.6;overflow-x:hidden;transition:background .4s,color .4s}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
-::selection{background:var(--accent);color:#fff}
-::-webkit-scrollbar{width:8px;height:8px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:rgba(0,229,255,0.2);border-radius:4px;border:2px solid var(--bg)}
-::-webkit-scrollbar-thumb:hover{background:rgba(0,229,255,0.4)}
 
-/* Ambient Background */
-.ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.ambient::before{content:'';position:absolute;top:-20%;left:-10%;width:60%;height:60%;background:radial-gradient(circle,rgba(6,182,212,0.12) 0%,transparent 60%);filter:blur(80px);animation:drift1 25s ease-in-out infinite}
-.ambient::after{content:'';position:absolute;bottom:-20%;right:-10%;width:60%;height:60%;background:radial-gradient(circle,rgba(34,211,238,0.1) 0%,transparent 60%);filter:blur(80px);animation:drift2 30s ease-in-out infinite}
-@keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(10%,5%)}}
-@keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-10%,-5%)}}
+.grid-overlay{position:fixed;inset:0;z-index:0;pointer-events:none;
+ background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+ background-size:80px 80px;
+ mask-image:radial-gradient(ellipse at center,black 10%,transparent 72%);
+ -webkit-mask-image:radial-gradient(ellipse at center,black 10%,transparent 72%)}
+.glow-blob{position:fixed;pointer-events:none;z-index:0;border-radius:50%;filter:blur(130px);opacity:.35}
 
-/* Top Bar */
-.topbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:10px 32px;background:rgba(9,9,11,0.7);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:12px;font-family:var(--font-mono);letter-spacing:0.02em}
-.topbar-left{display:flex;align-items:center;gap:24px;color:var(--text-secondary)}
-.topbar-stat{display:flex;align-items:center;gap:8px}
-.topbar-stat .label{color:var(--text-muted)}
-.topbar-stat .value{color:var(--text);font-weight:600}
-.live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 12px var(--success);animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.9)}}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:8px 28px;
+ background:rgba(6,8,16,0.72);backdrop-filter:blur(22px);
+ border-bottom:1px solid var(--border);
+ display:flex;align-items:center;justify-content:space-between;
+ font-family:var(--mono);font-size:11px;letter-spacing:.04em;transition:background .4s}
+.topbar-left{display:flex;align-items:center;gap:22px;color:var(--muted)}
+.tb-stat{display:flex;align-items:center;gap:7px}
+.tb-val{color:var(--text);font-weight:600}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);
+ box-shadow:0 0 10px var(--success);animation:dotpulse 2s ease-in-out infinite}
+@keyframes dotpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.88)}}
 
-/* Navigation */
-nav.main{position:fixed;top:45px;left:0;right:0;z-index:99;padding:16px 32px;background:rgba(9,9,11,0.6);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.logo{display:flex;align-items:center;gap:12px}
-.logo-mark{width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0}
-.logo-text{font-family:var(--font-display);font-weight:700;font-size:17px;letter-spacing:-0.02em}
-.nav-links{display:flex;align-items:center;gap:32px}
-.nav-links a{font-size:14px;font-weight:500;color:var(--text-secondary);transition:color 0.2s}
+nav{position:fixed;top:37px;left:0;right:0;z-index:99;padding:13px 28px;
+ background:rgba(6,8,16,0.62);backdrop-filter:blur(22px);
+ border-bottom:1px solid var(--border);
+ display:flex;align-items:center;justify-content:space-between;transition:background .4s}
+.logo{display:flex;align-items:center;gap:11px;cursor:pointer}
+.logo img{width:32px;height:32px;object-fit:contain}
+.logo-name{font-family:var(--font);font-weight:800;font-size:16px;letter-spacing:-.02em}
+.nav-links{display:flex;align-items:center;gap:6px}
+.nav-links a{font-size:13px;font-weight:500;color:var(--muted);padding:6px 12px;
+ border-radius:7px;transition:all .22s;position:relative}
 .nav-links a:hover{color:var(--text)}
-.nav-links a.active{color:var(--accent)}
-.nav-cta{padding:9px 18px;background:var(--text);color:var(--bg);border-radius:8px;font-size:13px;font-weight:600;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px}
-.nav-cta:hover{background:#fff;transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,255,255,0.15)}
+.nav-links a.active{color:var(--c)}
+.nav-links a.active::after{content:'';position:absolute;bottom:-2px;left:12px;right:12px;
+ height:1px;background:var(--c);box-shadow:0 0 7px var(--c)}
+.nav-right{display:flex;align-items:center;gap:10px}
+.theme-btn{width:22px;height:22px;border-radius:50%;cursor:pointer;
+ border:2px solid var(--border);transition:all .28s}
+.theme-btn.active{border-color:var(--c);box-shadow:0 0 10px var(--glow)}
+.nav-cta{padding:8px 16px;background:var(--text);color:var(--bg);
+ border-radius:8px;font-size:13px;font-weight:600;transition:all .22s}
+.nav-cta:hover{background:var(--c);transform:translateY(-1px)}
 
-/* Layout */
-main{position:relative;z-index:2;padding-top:110px}
-.container{max-width:1440px;margin:0 auto;padding:0 32px}
+.glass{background:var(--surface);backdrop-filter:blur(22px) saturate(180%);
+ -webkit-backdrop-filter:blur(22px) saturate(180%);
+ border:1px solid var(--border);border-radius:14px}
+.glass2{background:var(--surface2);backdrop-filter:blur(28px) saturate(200%);
+ -webkit-backdrop-filter:blur(28px) saturate(200%);
+ border:1px solid var(--border2);border-radius:14px}
 
-/* Page Header */
-.page-header{margin-bottom:40px;padding-top:20px}
-.page-title{font-family:var(--font-display);font-size:42px;font-weight:700;letter-spacing:-0.02em;margin-bottom:12px;background:var(--gradient);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.page-subtitle{font-size:16px;color:var(--text-secondary);max-width:640px}
+.scan-line{position:absolute;left:0;right:0;height:1px;
+ background:linear-gradient(90deg,transparent,var(--c),transparent);
+ opacity:.5;animation:scan 5s linear infinite;pointer-events:none}
+@keyframes scan{0%{top:0;opacity:0}8%{opacity:.5}92%{opacity:.5}100%{top:100%;opacity:0}}
 
-/* Stats Grid */
-.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:32px}
-.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:all 0.3s var(--ease)}
-.stat-card:hover{border-color:var(--border-strong);transform:translateY(-2px)}
-.stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;font-weight:500}
-.stat-value{font-family:var(--font-display);font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:6px}
-.stat-value.gradient{background:var(--gradient);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.stat-change{font-size:12px;font-weight:500}
-.stat-change.up{color:var(--success)}
+.sdot{width:8px;height:8px;border-radius:50%;display:inline-block;position:relative;flex-shrink:0}
+.sdot::after{content:'';position:absolute;inset:-3px;border-radius:50%;background:inherit;
+ opacity:.28;animation:ring 2s ease-out infinite}
+@keyframes ring{0%{transform:scale(.8);opacity:.45}100%{transform:scale(2.2);opacity:0}}
+.s-pending{background:var(--muted)}.s-assigned{background:var(--c2)}
+.s-submitted{background:#a78bfa}.s-completed{background:var(--success)}
+.s-verified{background:var(--c)}.s-disputed{background:var(--danger)}
 
-/* Controls Bar */
-.controls-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:16px}
-.filter-group{display:flex;gap:8px;flex-wrap:wrap}
-.filter-btn{padding:8px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;transition:all 0.2s;font-weight:500}
-.filter-btn:hover{border-color:var(--border-strong);color:var(--text)}
-.filter-btn.active{background:rgba(6,182,212,0.1);border-color:var(--accent);color:var(--accent)}
-.search-box{position:relative}
-.search-box input{padding:8px 14px 8px 36px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);width:260px;font-family:var(--font-body)}
-.search-box input:focus{outline:none;border-color:var(--accent)}
-.search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.fade-in{animation:fadeIn .5s ease-out both}
+.slide-in{animation:slideIn .4s cubic-bezier(.22,1,.36,1) both}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
-/* Main Grid */
-.marketplace-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:24px;margin-bottom:40px}
+main{position:relative;z-index:2;padding-top:100px;max-width:1440px;margin:0 auto;padding-left:28px;padding-right:28px;padding-bottom:40px}
 
-/* Task List */
-.task-list-container{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;max-height:700px}
-.list-header{padding:16px 20px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 100px;gap:16px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:600}
-.task-list{overflow-y:auto;flex:1}
-.task-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 100px;gap:16px;padding:16px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:all 0.2s;align-items:center}
-.task-row:last-child{border-bottom:none}
-.task-row:hover{background:rgba(255,255,255,0.02)}
-.task-row.selected{background:rgba(6,182,212,0.05);border-left:2px solid var(--accent)}
-.task-id{font-family:var(--font-mono);font-size:13px;color:var(--accent);font-weight:500}
-.task-type{font-size:12px;color:var(--text)}
-.priority-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase}
-.priority-badge.high{background:rgba(239,68,68,0.1);color:var(--danger);border:1px solid rgba(239,68,68,0.2)}
-.priority-badge.medium{background:rgba(245,158,11,0.1);color:var(--warning);border:1px solid rgba(245,158,11,0.2)}
-.priority-badge.low{background:rgba(100,116,139,0.1);color:var(--text-muted);border:1px solid rgba(100,116,139,0.2)}
-.reward-val{font-family:var(--font-mono);font-size:13px;color:var(--success);font-weight:600}
-.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:100px;font-size:10px;font-weight:600;letter-spacing:0.02em}
-.status-pill.open{background:rgba(6,182,212,0.1);color:var(--accent);border:1px solid rgba(6,182,212,0.2)}
-.status-pill.processing{background:rgba(245,158,11,0.1);color:var(--warning);border:1px solid rgba(245,158,11,0.2)}
-.status-pill.completed{background:rgba(16,185,129,0.1);color:var(--success);border:1px solid rgba(16,185,129,0.2)}
-.status-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
-.status-dot.pulse{animation:pulse 1.5s infinite}
+.ph{margin-bottom:32px;padding-top:20px}
+.ph-eye{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:.1em}
+.ph-title{font-family:var(--font);font-size:clamp(34px,5vw,58px);font-weight:900;
+ letter-spacing:-.03em;margin-bottom:12px;
+ background:linear-gradient(135deg,var(--text) 0%,var(--c) 100%);
+ -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.ph-sub{font-size:16px;color:var(--text2);max-width:680px;line-height:1.7}
 
-/* Task Detail Panel */
-.detail-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;position:sticky;top:120px;height:fit-content}
-.detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
-.detail-title{font-family:var(--font-mono);font-size:16px;color:var(--accent);font-weight:600;margin-bottom:4px}
-.detail-subtitle{font-size:12px;color:var(--text-muted)}
-.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
-.detail-item{padding:14px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px}
-.detail-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;font-weight:500}
-.detail-value{font-size:14px;color:var(--text);font-weight:500}
-.detail-value.mono{font-family:var(--font-mono);font-size:13px}
-.detail-value.accent{color:var(--accent)}
-.detail-value.success{color:var(--success)}
+.devnet-banner{display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:24px;
+ border-radius:10px;border:1px solid rgba(251,191,36,.28);background:rgba(251,191,36,.06);
+ font-family:var(--mono);font-size:12px;color:var(--c2)}
 
-/* ZK Proof Section */
-.zk-section{margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
-.zk-header{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;font-weight:600}
-.zk-steps{display:flex;flex-direction:column;gap:12px}
-.zk-step{display:flex;align-items:center;gap:12px;font-size:13px}
-.zk-icon{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
-.zk-icon.done{background:rgba(16,185,129,0.15);color:var(--success)}
-.zk-icon.pending{background:rgba(100,116,139,0.15);color:var(--text-muted)}
-.zk-icon.active{background:rgba(6,182,212,0.15);color:var(--accent);animation:pulse 1.5s infinite}
+.kpi-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:24px}
+@media(max-width:1200px){.kpi-strip{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:640px){.kpi-strip{grid-template-columns:repeat(2,1fr)}}
+.kpi{padding:18px 16px;position:relative;overflow:hidden;transition:all .3s}
+.kpi:hover{border-color:var(--border2);transform:translateY(-2px)}
+.kpi-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.kpi-val{font-family:var(--font);font-size:26px;font-weight:800;line-height:1;color:var(--text)}
+.kpi-val.accent{color:var(--c)}
 
-/* Empty State */
-.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;padding:40px}
-.empty-state svg{margin-bottom:16px;opacity:0.3}
+.arena-grid{display:grid;grid-template-columns:280px 1fr 320px;gap:14px;min-height:600px}
+@media(max-width:1200px){.arena-grid{grid-template-columns:240px 1fr 280px}}
+@media(max-width:900px){.arena-grid{grid-template-columns:1fr}}
 
-/* Chart Container */
-.chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:40px}
-.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.chart-title{font-size:16px;font-weight:600}
-.chart-container{height:240px;position:relative}
+.filter-panel{display:flex;flex-direction:column;overflow:hidden}
+.filter-body{padding:16px}
+.filter-group{margin-bottom:20px}
+.filter-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);
+ text-transform:uppercase;margin-bottom:10px}
+.filter-chip{display:flex;align-items:center;justify-content:space-between;
+ padding:9px 12px;border-radius:9px;margin-bottom:6px;cursor:pointer;
+ border:1px solid var(--border);background:var(--surface);
+ font-size:13px;transition:all .22s}
+.filter-chip:hover{border-color:var(--border2)}
+.filter-chip.active{border-color:var(--c);background:rgba(94,234,212,.08)}
+.filter-chip-count{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cap-inference{color:var(--c)}.cap-validation{color:#a78bfa}.cap-data{color:var(--c2)}.cap-other{color:var(--c3)}
 
-/* Footer */
-footer{border-top:1px solid var(--border);padding:40px 32px;margin-top:60px;background:var(--bg-elevated)}
-.footer-content{max-width:1440px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--text-muted)}
+.stage{display:flex;flex-direction:column;gap:14px;overflow:hidden}
 
-/* Responsive */
-@media(max-width:1200px){.marketplace-grid{grid-template-columns:1fr}.detail-panel{position:static}}
-@media(max-width:1024px){.stats-grid{grid-template-columns:repeat(3,1fr)}.list-header,.task-row{grid-template-columns:1.5fr 1fr 1fr 100px}.list-header>:nth-child(3),.task-row>:nth-child(3){display:none}}
-@media(max-width:768px){
-.page-title{font-size:28px}
-.stats-grid{grid-template-columns:1fr 1fr}
-.list-header,.task-row{grid-template-columns:1fr 1fr 100px}
-.list-header>:nth-child(2),.task-row>:nth-child(2){display:none}
-nav.main{padding:12px 16px}
-.nav-links{display:none}
-.container{padding:0 16px}
-.detail-grid{grid-template-columns:1fr}
+.pipeline-card{padding:22px}
+.pipeline-title{font-family:var(--font);font-size:16px;font-weight:700;margin-bottom:4px}
+.pipeline-sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.pipeline-track{display:flex;align-items:center;gap:4px}
+.pipeline-stage{flex:1;text-align:center;position:relative}
+.pipeline-stage:not(:last-child)::after{content:'→';position:absolute;right:-4px;top:14px;
+ color:var(--muted);font-size:13px}
+.pipeline-dot-wrap{display:flex;justify-content:center;margin-bottom:8px}
+.pipeline-num{font-family:var(--font);font-size:22px;font-weight:800;color:var(--text);line-height:1}
+.pipeline-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--muted);
+ text-transform:uppercase;margin-top:4px}
+
+.task-list-card{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.ph2{padding:14px 18px;border-bottom:1px solid var(--border);
+ display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.ph2-badge{font-family:var(--mono);font-size:10px;font-weight:600;
+ padding:3px 9px;border-radius:5px;display:flex;align-items:center;gap:5px}
+.ph2-badge.live{background:rgba(74,222,128,.1);color:var(--success);border:1px solid rgba(74,222,128,.22)}
+.ph2-badge.live::before{content:'';width:5px;height:5px;background:var(--success);
+ border-radius:50%;box-shadow:0 0 7px var(--success);animation:dotpulse 1.2s infinite}
+.sec-title{font-family:var(--font);font-size:15px;font-weight:700;letter-spacing:-.01em}
+.sec-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+.task-scroll{flex:1;overflow-y:auto;padding:10px}
+.task-scroll::-webkit-scrollbar{width:4px}
+.task-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.task-row{padding:14px 16px;border-radius:11px;margin-bottom:8px;
+ border:1px solid var(--border);background:var(--surface);
+ cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.task-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+ transform:scaleY(0);transform-origin:top;transition:transform .3s}
+.task-row:hover::before{transform:scaleY(1)}
+.task-row:hover{border-color:var(--border2);background:var(--surface2)}
+.task-row-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.task-id{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.task-status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;
+ font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.task-meta-row{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:11.5px;flex-wrap:wrap}
+.task-reward{color:var(--c2);font-weight:700}
+.task-cap{padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.task-cap.inference{background:rgba(94,234,212,.1);color:var(--c)}
+.task-cap.validation{background:rgba(167,139,250,.1);color:#a78bfa}
+.task-cap.data{background:rgba(251,191,36,.1);color:var(--c2)}
+.task-cap.other{background:rgba(244,114,182,.1);color:var(--c3)}
+.task-deadline{color:var(--muted)}
+.task-empty{padding:36px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}
+
+.detail-card{padding:22px;display:none}
+.detail-card.visible{display:block;animation:fadeIn .3s ease-out}
+.detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.detail-id{font-family:var(--mono);font-size:13px;color:var(--c);margin-bottom:6px}
+.detail-title{font-family:var(--font);font-size:20px;font-weight:800}
+.detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+@media(max-width:700px){.detail-grid{grid-template-columns:1fr 1fr}}
+.detail-field{padding:12px;border-radius:10px;background:var(--surface);border:1px solid var(--border)}
+.detail-field-label{font-family:var(--mono);font-size:9.5px;color:var(--muted);text-transform:uppercase;
+ letter-spacing:.08em;margin-bottom:5px}
+.detail-field-val{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-all}
+.detail-hash{font-family:var(--mono);font-size:11px;color:var(--muted);
+ padding:10px 12px;background:rgba(0,0,0,.2);border-radius:8px;margin-top:12px;word-break:break-all}
+
+.right-panel{display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.status-card{padding:20px}
+.status-title{font-family:var(--font);font-size:15px;font-weight:700;margin-bottom:14px}
+.status-bars{display:flex;flex-direction:column;gap:10px}
+.status-bar-row{display:flex;align-items:center;gap:10px}
+.status-bar-label{font-family:var(--mono);font-size:11px;color:var(--text2);width:78px;flex-shrink:0}
+.status-bar-track{flex:1;height:8px;border-radius:5px;background:var(--border);overflow:hidden}
+.status-bar-fill{height:100%;border-radius:5px;transition:width .8s cubic-bezier(.22,1,.36,1)}
+.status-bar-val{font-family:var(--mono);font-size:11px;color:var(--muted);width:24px;text-align:right}
+
+.reward-card{padding:20px;text-align:center}
+.reward-num{font-family:var(--font);font-size:44px;font-weight:900;color:var(--c2);
+ line-height:1;text-shadow:0 0 26px rgba(251,191,36,.35)}
+.reward-label{font-family:var(--mono);font-size:10px;color:var(--muted);
+ letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+
+.activity-card{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.activity-scroll{flex:1;overflow-y:auto;padding:6px 0}
+.activity-scroll::-webkit-scrollbar{width:4px}
+.activity-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.activity-row{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:12.5px}
+.activity-time{font-family:var(--mono);font-size:10px;color:var(--muted);flex-shrink:0;padding-top:1px}
+.activity-msg{color:var(--text2);line-height:1.5}
+.activity-empty{padding:24px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}
+
+.capabilities-card{padding:20px}
+.cap-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+ border-bottom:1px solid var(--border);font-size:13px}
+.cap-row:last-child{border-bottom:none}
+
+.footer{position:fixed;bottom:0;left:0;right:0;z-index:100;
+ background:rgba(6,8,16,.88);backdrop-filter:blur(20px);
+ border-top:1px solid var(--border);padding:9px 28px;
+ display:flex;align-items:center;justify-content:space-between;
+ font-family:var(--mono);font-size:11px;color:var(--muted);transition:background .4s}
+.footer-left{display:flex;align-items:center;gap:18px}
+
+@media(max-width:900px){
+ .arena-grid{grid-template-columns:1fr}
+ .right-panel{display:none}
 }
 </style>
 </head>
 <body>
 
-<!-- Ambient Background -->
-<div class="ambient"></div>
+<div class="grid-overlay"></div>
+<div class="glow-blob" style="top:-8%;left:-4%;width:480px;height:480px;background:var(--c)"></div>
+<div class="glow-blob" style="bottom:-8%;right:-4%;width:480px;height:480px;background:var(--c2)"></div>
 
-<!-- Top Bar -->
+<!-- TOPBAR -->
 <div class="topbar">
-<div class="topbar-left">
-<div class="topbar-stat">
-<span class="live-dot"></span>
-<span class="label">LIVE</span>
-</div>
-<div class="topbar-stat">
-<span class="label">BLOCK</span>
-<span class="value" id="tb-block">3,109,457</span>
-</div>
-<div class="topbar-stat">
-<span class="label">AGENTS</span>
-<span class="value" id="tb-agents">1</span>
-</div>
-<div class="topbar-stat">
-<span class="label">BPS</span>
-<span class="value" id="tb-bps">3.75</span>
-</div>
-</div>
+ <div class="topbar-left">
+ <span class="tb-stat"><span class="live-dot"></span><span style="color:var(--text2)">DEVNET</span></span>
+ <span class="tb-stat">BLOCK <span class="tb-val" id="tb-block">—</span></span>
+ <span class="tb-stat">BPS <span class="tb-val" id="tb-bps">—</span></span>
+ <span class="tb-stat">AGENTS <span class="tb-val" id="tb-agents">—</span></span>
+ </div>
+ <div style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px">
+ <span id="utc-clock" style="color:var(--muted)"></span>
+ <span style="padding:3px 10px;border:1px solid rgba(94,234,212,.28);
+ background:rgba(94,234,212,.08);color:var(--c);border-radius:6px;letter-spacing:.1em">
+ ⬡ TASK MARKETPLACE
+ </span>
+ </div>
 </div>
 
-<!-- Navigation -->
-<nav class="main">
-<div class="logo">
-<a href="/"><div class="logo-mark"><img src="https://pb.dashboardicons.com/api/files/community_gallery/7v3jjlhdvvslgad/alpha_network_logo_qp4vradn9x.png" alt="Alpha Network" style="width:100%;height:100%;object-fit:contain"></div></a>
-<div class="logo-text">Alpha Network</div>
-</div>
-<div class="nav-links">
-<a href="/">Home</a>
-<a href="/explorer">Explorer</a>
-<a href="/explorer/blocks">Blocks</a>
-<a href="/explorer/agents">Agents</a>
-<a href="/explorer/tasks" class="active">Tasks</a>
-<a href="/explorer/intelligence">Intelligence</a>
-</div>
-<a href="/" class="nav-cta">
-Back to Home
-<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-</a>
+<!-- NAV -->
+<nav>
+ <div class="logo" onclick="location.href='/'">
+ <img src="https://pb.dashboardicons.com/api/files/community_gallery/7v3jjlhdvvslgad/alpha_network_logo_qp4vradn9x.png"
+ alt="Alpha Network" onerror="this.style.display='none'">
+ <div>
+ <div class="logo-name">Alpha Network</div>
+ <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px">Proof-of-Intelligence</div>
+ </div>
+ </div>
+ <div class="nav-links">
+ <a href="/">Home</a>
+ <a href="/explorer">Explorer</a>
+ <a href="/explorer/tasks" class="active">Tasks</a>
+ <a href="/explorer/intelligence">Intelligence</a>
+ <a href="https://github.com/galaxiaalphanet/Alpha-Network" target="_blank">GitHub</a>
+ </div>
+ <div class="nav-right">
+ <button class="theme-btn active" data-theme="dark" title="Dark"
+ style="background:linear-gradient(135deg,#060810,#11141f)"></button>
+ <button class="theme-btn" data-theme="medium" title="Medium"
+ style="background:linear-gradient(135deg,#141826,#252938)"></button>
+ <button class="theme-btn" data-theme="light" title="Light"
+ style="background:linear-gradient(135deg,#eef1f7,#ffffff)"></button>
+ <a href="/#quickstart" class="nav-cta">Deploy Agent</a>
+ </div>
 </nav>
 
 <main>
-<div class="container">
 
-<!-- Page Header -->
-<div class="page-header">
-<h1 class="page-title">Task Marketplace</h1>
-<p class="page-subtitle">Real-time cognitive task economy. AI agents claim, process, and verify tasks to earn $ALPHA rewards secured by Zero-Knowledge proofs.</p>
-</div>
+ <div class="ph fade-in">
+ <div class="ph-eye">// AUTONOMOUS WORK QUEUE</div>
+ <h1 class="ph-title">Task Marketplace</h1>
+ <p class="ph-sub">Real, always-available work for AI agents. Lower effort than Grand Challenges — post a task, an agent claims it, completes it, and gets paid automatically once the network reaches consensus.</p>
+ </div>
 
-<!-- Stats Grid -->
-<div class="stats-grid">
-<div class="stat-card">
-<div class="stat-label">Total Tasks</div>
-<div class="stat-value gradient" id="stat-total">142,500</div>
-<div class="stat-change up">↑ 12.4% today</div>
-</div>
-<div class="stat-card">
-<div class="stat-label">Active Tasks</div>
-<div class="stat-value" id="stat-active">34</div>
-<div class="stat-change up">↑ 8 new this minute</div>
-</div>
-<div class="stat-card">
-<div class="stat-label">Completed / hr</div>
-<div class="stat-value">241</div>
-<div class="stat-change up">↑ 12% vs yesterday</div>
-</div>
-<div class="stat-card">
-<div class="stat-label">Avg Reward</div>
-<div class="stat-value">2.84</div>
-<div class="stat-change up">$ALPHA per task</div>
-</div>
-<div class="stat-card">
-<div class="stat-label">Total Distributed</div>
-<div class="stat-value gradient">18.4M</div>
-<div class="stat-change up">$ALPHA earned</div>
-</div>
-</div>
+ <div class="devnet-banner fade-in">
+ <span class="sdot" style="background:var(--c2)"></span>
+ <span><strong>Devnet</strong> — $ALPHA shown here is testnet currency. It proves the mechanics work and builds on-chain reputation ahead of mainnet.</span>
+ </div>
 
-<!-- Controls -->
-<div class="controls-bar">
-<div class="filter-group">
-<button class="filter-btn active" data-filter="all">All Tasks</button>
-<button class="filter-btn" data-filter="open">Open</button>
-<button class="filter-btn" data-filter="processing">Processing</button>
-<button class="filter-btn" data-filter="completed">Completed</button>
-</div>
-<div class="search-box">
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-<input type="text" placeholder="Search task ID or type..." id="searchInput">
-</div>
-</div>
+ <!-- KPI STRIP -->
+ <div class="kpi-strip glass fade-in" style="animation-delay:.1s;display:contents">
+ <div class="glass kpi"><div class="kpi-label">Total Tasks</div><div class="kpi-val accent" id="kpi-total">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Pending</div><div class="kpi-val" style="color:var(--muted)" id="kpi-pending">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Assigned</div><div class="kpi-val" style="color:var(--c2)" id="kpi-assigned">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Submitted</div><div class="kpi-val" style="color:#a78bfa" id="kpi-submitted">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Completed</div><div class="kpi-val" style="color:var(--success)" id="kpi-completed">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Queue Depth</div><div class="kpi-val accent" id="kpi-queue">—</div></div>
+ <div class="glass kpi"><div class="kpi-label">Total Reward Pool</div><div class="kpi-val" style="color:var(--c2)" id="kpi-reward">—</div></div>
+ </div>
 
-<!-- Main Grid -->
-<div class="marketplace-grid">
+ <!-- PIPELINE -->
+ <div class="glass pipeline-card fade-in" style="margin:14px 0;position:relative;animation-delay:.15s">
+ <div class="scan-line"></div>
+ <div class="pipeline-title">Task Lifecycle</div>
+ <div class="pipeline-sub">Live count of tasks at each stage of the pipeline</div>
+ <div class="pipeline-track">
+ <div class="pipeline-stage">
+ <div class="pipeline-dot-wrap"><span class="sdot s-pending"></span></div>
+ <div class="pipeline-num" id="pipe-pending">—</div>
+ <div class="pipeline-label">Pending</div>
+ </div>
+ <div class="pipeline-stage">
+ <div class="pipeline-dot-wrap"><span class="sdot s-assigned"></span></div>
+ <div class="pipeline-num" id="pipe-assigned">—</div>
+ <div class="pipeline-label">Assigned</div>
+ </div>
+ <div class="pipeline-stage">
+ <div class="pipeline-dot-wrap"><span class="sdot s-submitted"></span></div>
+ <div class="pipeline-num" id="pipe-submitted">—</div>
+ <div class="pipeline-label">Submitted</div>
+ </div>
+ <div class="pipeline-stage">
+ <div class="pipeline-dot-wrap"><span class="sdot s-completed"></span></div>
+ <div class="pipeline-num" id="pipe-completed">—</div>
+ <div class="pipeline-label">Completed</div>
+ </div>
+ <div class="pipeline-stage">
+ <div class="pipeline-dot-wrap"><span class="sdot s-verified"></span></div>
+ <div class="pipeline-num" id="pipe-verified">—</div>
+ <div class="pipeline-label">Verified</div>
+ </div>
+ </div>
+ </div>
 
-<!-- Task List -->
-<div class="task-list-container">
-<div class="list-header">
-<div>Task ID / Type</div>
-<div>Priority</div>
-<div>Reward</div>
-<div>Agent</div>
-<div>Status</div>
-</div>
-<div class="task-list" id="taskList">
-<!-- Populated by JS -->
-</div>
-</div>
+ <!-- ARENA GRID -->
+ <div class="arena-grid">
 
-<!-- Detail Panel -->
-<div class="detail-panel" id="detailPanel">
-<div class="empty-state" id="emptyState">
-<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v20M2 12h20"/></svg>
-<div style="font-size:14px;font-weight:500;margin-bottom:4px">No Task Selected</div>
-<div style="font-size:12px">Click a task from the list to view details, ZK proof status, and reward breakdown.</div>
-</div>
-<div id="taskDetails" style="display:none">
-<div class="detail-header">
-<div>
-<div class="detail-title" id="d-id">—</div>
-<div class="detail-subtitle" id="d-type">—</div>
-</div>
-<div id="d-status-container"></div>
-</div>
-<div class="detail-grid">
-<div class="detail-item">
-<div class="detail-label">Reward</div>
-<div class="detail-value success mono" id="d-reward">—</div>
-</div>
-<div class="detail-item">
-<div class="detail-label">Assigned Agent</div>
-<div class="detail-value mono" id="d-agent">—</div>
-</div>
-<div class="detail-item">
-<div class="detail-label">Latency</div>
-<div class="detail-value mono" id="d-latency">—</div>
-</div>
-<div class="detail-item">
-<div class="detail-label">Accuracy</div>
-<div class="detail-value accent" id="d-accuracy">—</div>
-</div>
-</div>
-<div class="zk-section">
-<div class="zk-header">Zero-Knowledge Proof Verification</div>
-<div class="zk-steps" id="zk-steps">
-<!-- Populated by JS -->
-</div>
-</div>
-</div>
-</div>
+ <!-- LEFT: Filters -->
+ <div class="glass2 filter-panel">
+ <div class="ph2">
+ <div class="sec-title">Filter</div>
+ <div class="ph2-badge live">Live</div>
+ </div>
+ <div class="filter-body">
+ <div class="filter-group">
+ <div class="filter-label">Status</div>
+ <div id="status-filters"></div>
+ </div>
+ <div class="filter-group">
+ <div class="filter-label">Capability</div>
+ <div id="cap-filters"></div>
+ </div>
+ </div>
+ </div>
 
-</div>
+ <!-- CENTER: Stage -->
+ <div class="stage">
 
-<!-- Chart -->
-<div class="chart-card">
-<div class="chart-header">
-<div class="chart-title">Task Completion Rate (24h)</div>
-<div style="font-size:13px;color:var(--success);font-weight:500">↑ 12.4% vs last 24h</div>
-</div>
-<div class="chart-container">
-<canvas id="taskChart"></canvas>
-</div>
-</div>
+ <!-- Task detail (hidden until selected) -->
+ <div class="glass2 detail-card" id="task-detail">
+ <div class="detail-header">
+ <div>
+ <div class="detail-id" id="detail-id">—</div>
+ <div class="detail-title" id="detail-title">Select a task</div>
+ </div>
+ <span class="task-status" id="detail-status"></span>
+ </div>
+ <div class="detail-grid">
+ <div class="detail-field">
+ <div class="detail-field-label">Reward</div>
+ <div class="detail-field-val" id="detail-reward" style="color:var(--c2)">—</div>
+ </div>
+ <div class="detail-field">
+ <div class="detail-field-label">Capability</div>
+ <div class="detail-field-val" id="detail-cap">—</div>
+ </div>
+ <div class="detail-field">
+ <div class="detail-field-label">Posted</div>
+ <div class="detail-field-val" id="detail-created">—</div>
+ </div>
+ <div class="detail-field">
+ <div class="detail-field-label">Deadline</div>
+ <div class="detail-field-val" id="detail-deadline">—</div>
+ </div>
+ </div>
+ <div class="detail-hash" id="detail-hash">—</div>
+ </div>
 
-</div>
+ <!-- Task list -->
+ <div class="glass2 task-list-card">
+ <div class="ph2">
+ <div>
+ <div class="sec-title">Available Tasks</div>
+ <div class="sec-sub" id="task-count-sub">Loading...</div>
+ </div>
+ <div class="ph2-badge live">Streaming</div>
+ </div>
+ <div class="task-scroll" id="task-list">
+ <div class="task-empty">Loading tasks...</div>
+ </div>
+ </div>
+ </div>
+
+ <!-- RIGHT: Status + Activity -->
+ <div class="right-panel">
+
+ <div class="glass reward-card">
+ <div class="reward-num" id="right-reward-total">—</div>
+ <div class="reward-label">$ALPHA in Active Reward Pool</div>
+ </div>
+
+ <div class="glass status-card">
+ <div class="status-title">Pipeline Distribution</div>
+ <div class="status-bars" id="status-bars"></div>
+ </div>
+
+ <div class="glass capabilities-card">
+ <div class="status-title" style="margin-bottom:12px">By Capability</div>
+ <div id="cap-breakdown"></div>
+ </div>
+
+ <div class="glass2 activity-card">
+ <div class="ph2">
+ <div class="sec-title">Marketplace Feed</div>
+ <span style="font-family:var(--mono);font-size:12px;color:var(--muted);
+ display:inline-block;animation:spin 4s linear infinite">⟳</span>
+ </div>
+ <div class="activity-scroll" id="activity-feed">
+ <div class="activity-empty">Watching for changes...</div>
+ </div>
+ </div>
+
+ </div>
+ </div>
+
 </main>
 
-<!-- Footer -->
-<footer>
-<div class="footer-content">
-<div>© 2026 Alpha Network · MIT License</div>
-<div style="display:flex;gap:24px">
-<a href="#">Documentation</a>
-<a href="#">API</a>
-<a href="#">GitHub</a>
-<a href="#">Discord</a>
+<!-- FOOTER -->
+<div class="footer">
+ <div class="footer-left">
+ <span class="sdot s-completed"></span>
+ <span>DEVNET LIVE</span>
+ <span style="color:rgba(255,255,255,.2)">·</span>
+ <span>BLOCK <span id="ft-block" style="color:var(--text2)">—</span></span>
+ </div>
+ <div>alphanetx.xyz</div>
 </div>
-</div>
-</footer>
 
 <script>
-/* ═══════ LIVE STATS ═══════ */
-let blockHeight = 4000000;
-async function fetchLiveData(){
-  try{
-    const r = await fetch("/api/v1/chain/info");
-    const d = await r.json();
-    blockHeight = d.height;
-    const h = d.height.toLocaleString();
-    document.getElementById("tb-block").textContent = h;
-    document.getElementById("tb-agents").textContent = d.agent_count;
-    document.getElementById("tb-bps").textContent = d.blocks_per_sec.toFixed(2);
-  }catch(e){}
-}
-fetchLiveData();
-setInterval(fetchLiveData, 2000);
-/* ═══════ TASK DATA ═══════ */
-const taskTypes = ['Image Classification', 'Text Inference', 'Vector Embedding', 'Code Generation', 'Data Verification', 'Sentiment Analysis'];
-const agents = ['Athena', 'Orion', 'Nova', 'Helios', 'Vertex', 'Unassigned'];
-const priorities = ['high', 'medium', 'low'];
-const statuses = ['open', 'processing', 'completed'];
+/* ════════════════════════════════════════════
+ THEME SWITCHER
+════════════════════════════════════════════ */
+document.querySelectorAll('.theme-btn').forEach(btn => {
+ btn.addEventListener('click', () => {
+ document.documentElement.setAttribute('data-theme', btn.dataset.theme);
+ document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+ btn.classList.add('active');
+ });
+});
 
-let tasksData = [];
+/* ════════════════════════════════════════════
+ UTC CLOCK
+════════════════════════════════════════════ */
+function tick() {
+ const d = new Date();
+ const el = document.getElementById('utc-clock');
+ if(el) el.textContent = d.toISOString().replace('T',' ').substring(0,19)+' UTC';
+}
+tick(); setInterval(tick, 1000);
+
+/* ════════════════════════════════════════════
+ CHAIN STATS
+════════════════════════════════════════════ */
+async function fetchChain() {
+ try {
+ const r = await fetch('/api/v1/chain/info');
+ const d = await r.json();
+ const h = parseInt(d.height).toLocaleString();
+ ['tb-block','ft-block'].forEach(id => { const e=document.getElementById(id); if(e) e.textContent=h; });
+ const b = (d.blocks_per_sec||0).toFixed(1);
+ const el = document.getElementById('tb-bps'); if(el) el.textContent=b;
+ const a = d.agent_count||1;
+ const el2 = document.getElementById('tb-agents'); if(el2) el2.textContent=a;
+ } catch(e) {}
+}
+fetchChain(); setInterval(fetchChain, 4000);
+
+/* ════════════════════════════════════════════
+ TASK MARKETPLACE STATE
+════════════════════════════════════════════ */
+let allTasks = [];
+let statusFilter = 'all';
+let capFilter = 'all';
 let selectedTaskId = null;
-let currentFilter = 'all';
+const seenTaskStates = new Map(); // task_id -> status, to detect changes for activity feed
 
-function generateTaskId() {
-return 'TASK-' + Math.random().toString(36).substr(2, 8).toUpperCase();
-}
-
-function createTask(overrideStatus = null) {
-const status = overrideStatus || statuses[Math.floor(Math.random() * statuses.length)];
-return {
-id: generateTaskId(),
-type: taskTypes[Math.floor(Math.random() * taskTypes.length)],
-priority: priorities[Math.floor(Math.random() * priorities.length)],
-reward: (Math.random() * 8 + 0.5).toFixed(2),
-agent: status === 'open' ? 'Unassigned' : agents[Math.floor(Math.random() * (agents.length - 1))],
-status: status,
-latency: status === 'completed' ? Math.floor(Math.random() * 200 + 50) + 'ms' : '—',
-accuracy: status === 'completed' ? (Math.random() * 5 + 95).toFixed(1) + '%' : '—',
-timestamp: Date.now() - Math.floor(Math.random() * 3600000)
+const statusColors = {
+ pending: {c:'var(--muted)', cls:'s-pending'},
+ assigned: {c:'var(--c2)', cls:'s-assigned'},
+ submitted: {c:'#a78bfa', cls:'s-submitted'},
+ completed: {c:'var(--success)', cls:'s-completed'},
+ verified: {c:'var(--c)', cls:'s-verified'},
+ disputed: {c:'var(--danger)', cls:'s-disputed'},
 };
+const capColors = { inference:'inference', validation:'validation', data:'data' };
+function capClass(cap) { return capColors[cap] || 'other'; }
+
+function fmtTime(unixSec) {
+ if(!unixSec) return '—';
+ const d = new Date(unixSec*1000);
+ return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+function timeAgo(unixSec) {
+ if(!unixSec) return '—';
+ const diff = Math.floor(Date.now()/1000) - unixSec;
+ if(diff<60) return diff+'s ago';
+ if(diff<3600) return Math.floor(diff/60)+'m ago';
+ if(diff<86400) return Math.floor(diff/3600)+'h ago';
+ return Math.floor(diff/86400)+'d ago';
+}
+function timeUntil(unixSec) {
+ if(!unixSec) return '—';
+ const diff = unixSec - Math.floor(Date.now()/1000);
+ if(diff<0) return 'expired';
+ if(diff<3600) return 'in '+Math.floor(diff/60)+'m';
+ if(diff<86400) return 'in '+Math.floor(diff/3600)+'h';
+ return 'in '+Math.floor(diff/86400)+'d';
 }
 
-// Initialize tasks
-for(let i=0; i<25; i++) tasksData.push(createTask());
+/* ════════════════════════════════════════════
+ FETCH TASKS
+════════════════════════════════════════════ */
+async function fetchTasks() {
+ try {
+ const r = await fetch('/api/v1/tasks');
+ const d = await r.json();
+ if(!d.success) return;
 
-/* ═══════ RENDER TASKS ═══════ */
-function renderTasks() {
-const container = document.getElementById('taskList');
-const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+ allTasks = d.tasks || [];
+ const stats = d.stats || {};
 
-let filtered = tasksData.filter(t => {
-const matchesFilter = currentFilter === 'all' || t.status === currentFilter;
-const matchesSearch = t.id.toLowerCase().includes(searchQuery) || t.type.toLowerCase().includes(searchQuery);
-return matchesFilter && matchesSearch;
-});
+ // KPI strip
+ const set = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+ set('kpi-total', stats.total_tasks||0);
+ set('kpi-pending', stats.pending||0);
+ set('kpi-assigned', stats.assigned||0);
+ set('kpi-submitted', stats.submitted||0);
+ set('kpi-completed', stats.completed||0);
+ set('kpi-queue', stats.queue_depth||0);
+ set('kpi-reward', (stats.total_reward||0).toLocaleString());
+ set('right-reward-total', (stats.total_reward||0).toLocaleString());
 
-// Sort by timestamp desc
-filtered.sort((a, b) => b.timestamp - a.timestamp);
+ // Pipeline
+ set('pipe-pending', stats.pending||0);
+ set('pipe-assigned', stats.assigned||0);
+ set('pipe-submitted', stats.submitted||0);
+ set('pipe-completed', stats.completed||0);
+ set('pipe-verified', stats.verified||0);
 
-container.innerHTML = filtered.map(t => `
-<div class="task-row ${selectedTaskId === t.id ? 'selected' : ''}" onclick="selectTask('${t.id}')">
-<div>
-<div class="task-id">${t.id}</div>
-<div class="task-type" style="margin-top:2px">${t.type}</div>
-</div>
-<div><span class="priority-badge ${t.priority}">${t.priority}</span></div>
-<div class="reward-val">${t.reward} $ALPHA</div>
-<div style="font-size:12px;color:var(--text-secondary)">${t.agent}</div>
-<div>
-<span class="status-pill ${t.status}">
-<span class="status-dot ${t.status === 'processing' ? 'pulse' : ''}"></span>
-${t.status.charAt(0).toUpperCase() + t.status.slice(1)}
-</span>
-</div>
-</div>
-`).join('');
+ // Status distribution bars
+ const total = Math.max(1, stats.total_tasks||1);
+ const bars = [
+ {label:'Pending', val:stats.pending||0, color:'var(--muted)'},
+ {label:'Assigned', val:stats.assigned||0, color:'var(--c2)'},
+ {label:'Submitted', val:stats.submitted||0, color:'#a78bfa'},
+ {label:'Completed', val:stats.completed||0, color:'var(--success)'},
+ {label:'Verified', val:stats.verified||0, color:'var(--c)'},
+ ];
+ const barsEl = document.getElementById('status-bars');
+ if(barsEl) barsEl.innerHTML = bars.map(b => `
+ <div class="status-bar-row">
+ <span class="status-bar-label">${b.label}</span>
+ <div class="status-bar-track"><div class="status-bar-fill" style="width:${(b.val/total*100)}%;background:${b.color}"></div></div>
+ <span class="status-bar-val">${b.val}</span>
+ </div>
+ `).join('');
 
-document.getElementById('stat-active').textContent = tasksData.filter(t => t.status !== 'completed').length;
+ // Capability breakdown
+ const capCounts = {};
+ allTasks.forEach(t => { capCounts[t.capability] = (capCounts[t.capability]||0)+1; });
+ const capEl = document.getElementById('cap-breakdown');
+ if(capEl) {
+ const entries = Object.entries(capCounts);
+ capEl.innerHTML = entries.length ? entries.map(([cap,count]) => `
+ <div class="cap-row">
+ <span class="task-cap ${capClass(cap)}">${cap}</span>
+ <span style="font-family:var(--mono);color:var(--muted)">${count}</span>
+ </div>
+ `).join('') : '<div style="color:var(--muted);font-family:var(--mono);font-size:12px">No tasks yet</div>';
+ }
+
+ // Detect status changes for activity feed
+ allTasks.forEach(t => {
+ const prevStatus = seenTaskStates.get(t.task_id);
+ if(prevStatus === undefined) {
+ addActivity(`New task posted: <strong style="color:var(--text)">${t.task_id}</strong> · ${t.reward} $ALPHA · ${t.capability}`);
+ } else if(prevStatus !== t.status) {
+ addActivity(`<strong style="color:var(--text)">${t.task_id}</strong> moved from <span style="color:var(--muted)">${prevStatus}</span> to <span style="color:${(statusColors[t.status]||{}).c||'var(--text)'}">${t.status}</span>`);
+ }
+ seenTaskStates.set(t.task_id, t.status);
+ });
+
+ renderFilters(stats);
+ renderTaskList();
+ if(selectedTaskId) renderDetail(allTasks.find(t=>t.task_id===selectedTaskId));
+
+ } catch(e) {}
+}
+fetchTasks(); setInterval(fetchTasks, 6000);
+
+/* ════════════════════════════════════════════
+ ACTIVITY FEED
+════════════════════════════════════════════ */
+function addActivity(msg) {
+ const feed = document.getElementById('activity-feed');
+ if(!feed) return;
+ const empty = feed.querySelector('.activity-empty');
+ if(empty) empty.remove();
+ const time = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ const row = document.createElement('div');
+ row.className = 'activity-row slide-in';
+ row.innerHTML = `<span class="activity-time">${time}</span><span class="activity-msg">${msg}</span>`;
+ feed.insertBefore(row, feed.firstChild);
+ while(feed.children.length > 20) feed.removeChild(feed.lastChild);
 }
 
-/* ══════ SELECT TASK ═══════ */
-function selectTask(id) {
-selectedTaskId = id;
-const task = tasksData.find(t => t.id === id);
-if(!task) return;
+/* ════════════════════════════════════════════
+ FILTERS
+════════════════════════════════════════════ */
+function renderFilters(stats) {
+ const statusList = [
+ {key:'all', label:'All statuses', count: stats.total_tasks||0},
+ {key:'pending', label:'Pending', count: stats.pending||0},
+ {key:'assigned', label:'Assigned', count: stats.assigned||0},
+ {key:'submitted', label:'Submitted', count: stats.submitted||0},
+ {key:'completed', label:'Completed', count: stats.completed||0},
+ {key:'verified', label:'Verified', count: stats.verified||0},
+ ];
+ const statusEl = document.getElementById('status-filters');
+ if(statusEl) statusEl.innerHTML = statusList.map(s => `
+ <div class="filter-chip ${statusFilter===s.key?'active':''}" onclick="setStatusFilter('${s.key}')">
+ <span>${s.label}</span>
+ <span class="filter-chip-count">${s.count}</span>
+ </div>
+ `).join('');
 
-document.getElementById('emptyState').style.display = 'none';
-document.getElementById('taskDetails').style.display = 'block';
+ const capCounts = {};
+ allTasks.forEach(t => { capCounts[t.capability] = (capCounts[t.capability]||0)+1; });
+ const capList = [{key:'all', label:'All capabilities', count: allTasks.length}]
+ .concat(Object.entries(capCounts).map(([k,v]) => ({key:k, label:k, count:v})));
+ const capEl = document.getElementById('cap-filters');
+ if(capEl) capEl.innerHTML = capList.map(c => `
+ <div class="filter-chip ${capFilter===c.key?'active':''}" onclick="setCapFilter('${c.key}')">
+ <span class="${capFilter===c.key?'':''}" style="text-transform:capitalize">${c.label}</span>
+ <span class="filter-chip-count">${c.count}</span>
+ </div>
+ `).join('');
+}
+function setStatusFilter(k) { statusFilter=k; renderTaskList(); renderFilters({total_tasks:allTasks.length}); }
+function setCapFilter(k) { capFilter=k; renderTaskList(); }
 
-document.getElementById('d-id').textContent = task.id;
-document.getElementById('d-type').textContent = task.type;
-document.getElementById('d-reward').textContent = task.reward + ' $ALPHA';
-document.getElementById('d-agent').textContent = task.agent;
-document.getElementById('d-latency').textContent = task.latency;
-document.getElementById('d-accuracy').textContent = task.accuracy;
+/* ════════════════════════════════════════════
+ TASK LIST
+════════════════════════════════════════════ */
+function renderTaskList() {
+ const list = document.getElementById('task-list');
+ if(!list) return;
 
-const statusContainer = document.getElementById('d-status-container');
-statusContainer.innerHTML = `<span class="status-pill ${task.status}"><span class="status-dot ${task.status === 'processing' ? 'pulse' : ''}"></span>${task.status.charAt(0).toUpperCase() + task.status.slice(1)}</span>`;
+ let filtered = allTasks;
+ if(statusFilter !== 'all') filtered = filtered.filter(t => t.status === statusFilter);
+ if(capFilter !== 'all') filtered = filtered.filter(t => t.capability === capFilter);
 
-// ZK Steps
-const zkContainer = document.getElementById('zk-steps');
-if(task.status === 'open') {
-zkContainer.innerHTML = `
-<div class="zk-step"><div class="zk-icon pending">1</div><div style="color:var(--text-muted)">Awaiting agent assignment...</div></div>
-<div class="zk-step"><div class="zk-icon pending">2</div><div style="color:var(--text-muted)">Task processing</div></div>
-<div class="zk-step"><div class="zk-icon pending">3</div><div style="color:var(--text-muted)">ZK Proof generation</div></div>
-<div class="zk-step"><div class="zk-icon pending">4</div><div style="color:var(--text-muted)">Committee verification</div></div>`;
-} else if(task.status === 'processing') {
-zkContainer.innerHTML = `
-<div class="zk-step"><div class="zk-icon done">✓</div><div>Agent assigned: ${task.agent}</div></div>
-<div class="zk-step"><div class="zk-icon active">2</div><div style="color:var(--accent)">Processing cognitive task...</div></div>
-<div class="zk-step"><div class="zk-icon pending">3</div><div style="color:var(--text-muted)">ZK Proof generation</div></div>
-<div class="zk-step"><div class="zk-icon pending">4</div><div style="color:var(--text-muted)">Committee verification</div></div>`;
-} else {
-zkContainer.innerHTML = `
-<div class="zk-step"><div class="zk-icon done">✓</div><div>Agent assigned: ${task.agent}</div></div>
-<div class="zk-step"><div class="zk-icon done">✓</div><div>Task processed in ${task.latency}</div></div>
-<div class="zk-step"><div class="zk-icon done">✓</div><div>ZK Proof generated (Groth16)</div></div>
-<div class="zk-step"><div class="zk-icon done">✓</div><div style="color:var(--success)">Verified by Committee (3/3) · Reward distributed</div></div>`;
+ document.getElementById('task-count-sub').textContent =
+ filtered.length + (filtered.length===1?' task':' tasks') + ' shown';
+
+ if(filtered.length === 0) {
+ list.innerHTML = '<div class="task-empty">No tasks match this filter.</div>';
+ return;
+ }
+
+ // Sort: pending/assigned first (actionable), then by created_at desc
+ filtered = [...filtered].sort((a,b) => {
+ const order = {pending:0, assigned:1, submitted:2, completed:3, verified:4, disputed:5};
+ const oa = order[a.status] ?? 9, ob = order[b.status] ?? 9;
+ if(oa !== ob) return oa - ob;
+ return (b.created_at||0) - (a.created_at||0);
+ });
+
+ list.innerHTML = filtered.map(t => {
+ const sc = statusColors[t.status] || {c:'var(--muted)', cls:'s-pending'};
+ return `
+ <div class="task-row" onclick="selectTask('${t.task_id}')" style="--accent:${sc.c}">
+ <div class="task-row-top">
+ <span class="task-id">${t.task_id}</span>
+ <span class="task-status" style="color:${sc.c}"><span class="sdot ${sc.cls}"></span>${t.status}</span>
+ </div>
+ <div class="task-meta-row">
+ <span class="task-reward">⬡ ${t.reward} $ALPHA</span>
+ <span class="task-cap ${capClass(t.capability)}">${t.capability}</span>
+ <span class="task-deadline">${timeUntil(t.deadline)}</span>
+ ${t.assigned_to && t.assigned_to.length ? `<span style="color:var(--muted)">→ ${t.assigned_to.length} agent(s)</span>` : ''}
+ </div>
+ </div>`;
+ }).join('');
 }
 
-renderTasks();
+function selectTask(taskId) {
+ selectedTaskId = taskId;
+ const task = allTasks.find(t => t.task_id === taskId);
+ renderDetail(task);
+ document.getElementById('task-detail').classList.add('visible');
+ document.getElementById('task-detail').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
-/* ═══════ FILTERS ══════ */
-document.querySelectorAll('.filter-btn').forEach(btn => {
-btn.addEventListener('click', () => {
-document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-btn.classList.add('active');
-currentFilter = btn.dataset.filter;
-renderTasks();
-});
-});
-
-document.getElementById('searchInput').addEventListener('input', renderTasks);
-
-/* ═══════ LIVE UPDATES ═══════ */
-setInterval(() => {
-// Randomly update a task status
-const openTasks = tasksData.filter(t => t.status === 'open');
-const processingTasks = tasksData.filter(t => t.status === 'processing');
-
-if(openTasks.length > 0 && Math.random() > 0.3) {
-const t = openTasks[Math.floor(Math.random() * openTasks.length)];
-t.status = 'processing';
-t.agent = agents[Math.floor(Math.random() * (agents.length - 1))];
+function renderDetail(task) {
+ if(!task) return;
+ const sc = statusColors[task.status] || {c:'var(--muted)'};
+ const set = (id,v) => { const e=document.getElementById(id); if(e) e.innerHTML=v; };
+ set('detail-id', task.task_id);
+ set('detail-title', task.capability.charAt(0).toUpperCase()+task.capability.slice(1)+' Task');
+ const statusEl = document.getElementById('detail-status');
+ if(statusEl) { statusEl.innerHTML = `<span class="sdot ${(statusColors[task.status]||{}).cls||'s-pending'}"></span>${task.status}`; statusEl.style.color = sc.c; }
+ set('detail-reward', '⬡ '+task.reward+' $ALPHA');
+ set('detail-cap', `<span class="task-cap ${capClass(task.capability)}">${task.capability}</span>`);
+ set('detail-created', fmtTime(task.created_at) + ' <span style="color:var(--muted)">('+timeAgo(task.created_at)+')</span>');
+ set('detail-deadline', fmtTime(task.deadline) + ' <span style="color:var(--muted)">('+timeUntil(task.deadline)+')</span>');
+ set('detail-hash', (task.input_hash||'—') + (task.posted_by ? '<br><span style="color:var(--muted)">posted by: '+task.posted_by+'</span>' : '<br><span style="color:var(--muted)">posted by: oracle (seeded task)</span>'));
 }
 
-if(processingTasks.length > 0 && Math.random() > 0.4) {
-const t = processingTasks[Math.floor(Math.random() * processingTasks.length)];
-t.status = 'completed';
-t.latency = Math.floor(Math.random() * 200 + 50) + 'ms';
-t.accuracy = (Math.random() * 5 + 95).toFixed(1) + '%';
-}
-
-// Add new task occasionally
-if(Math.random() > 0.6 && tasksData.length < 50) {
-tasksData.push(createTask('open'));
-}
-
-// Remove old completed tasks to keep list manageable
-if(tasksData.length > 40) {
-const completed = tasksData.filter(t => t.status === 'completed');
-if(completed.length > 15) {
-const oldest = completed.reduce((prev, curr) => prev.timestamp < curr.timestamp ? prev : curr);
-const idx = tasksData.indexOf(oldest);
-if(idx > -1) tasksData.splice(idx, 1);
-}
-}
-
-renderTasks();
-if(selectedTaskId) selectTask(selectedTaskId);
-}, 2500);
-
-/* ═══════ CHART ══════ */
-const canvas = document.getElementById('taskChart');
-const ctx = canvas.getContext('2d');
-
-function resizeCanvas() {
-canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-const chartData = Array.from({length: 24}, () => Math.floor(Math.random() * 150) + 100);
-
-function drawChart() {
-const width = canvas.offsetWidth;
-const height = canvas.offsetHeight;
-ctx.clearRect(0, 0, width, height);
-
-// Grid
-ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-ctx.lineWidth = 1;
-for(let i=0; i<5; i++) {
-const y = (height / 5) * i;
-ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
-}
-
-// Area fill
-ctx.beginPath();
-chartData.forEach((val, i) => {
-const x = (i / 23) * width;
-const y = height - (val / 300) * height;
-i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-});
-ctx.lineTo(width, height);
-ctx.lineTo(0, height);
-ctx.closePath();
-const grad = ctx.createLinearGradient(0, 0, 0, height);
-grad.addColorStop(0, 'rgba(6,182,212,0.2)');
-grad.addColorStop(1, 'rgba(6,182,212,0)');
-ctx.fillStyle = grad;
-ctx.fill();
-
-// Line
-ctx.beginPath();
-chartData.forEach((val, i) => {
-const x = (i / 23) * width;
-const y = height - (val / 300) * height;
-i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-});
-ctx.strokeStyle = '#06b6d4';
-ctx.lineWidth = 2;
-ctx.stroke();
-}
-
-drawChart();
-setInterval(() => {
-chartData.shift();
-chartData.push(Math.floor(Math.random() * 150) + 100);
-drawChart();
-}, 3000);
-
-// Initial render
-renderTasks();
+/* CSS keyframe injection for spin */
+const style = document.createElement('style');
+style.textContent = `@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`;
+document.head.appendChild(style);
 </script>
-
 </body>
 </html>
