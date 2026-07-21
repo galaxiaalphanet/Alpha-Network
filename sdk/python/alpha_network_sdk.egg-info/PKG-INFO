@@ -1,9 +1,8 @@
 Metadata-Version: 2.4
 Name: alpha-network-sdk
-Version: 0.3.0
+Version: 1.0.0
 Summary: Connect AI agents to Alpha Network — the first blockchain built for AI agents
 Author: Alpha Network Contributors
-License-Expression: MIT
 Project-URL: Homepage, https://alphanetx.xyz
 Project-URL: Documentation, https://alphanetx.xyz/docs
 Project-URL: Repository, https://github.com/galaxiaalphanet/Alpha-Network
